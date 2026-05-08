@@ -17,3 +17,19 @@ export type Estimate = {
   created_at: string;
   updated_at: string;
 };
+
+export type QuoteItem = {
+  id: string;
+  quote_id: string;
+  price_item_id: string | null;
+  internal_name: string;
+  customer_name: string;
+  unit: string;
+  quantity: number;
+  unit_cost_price: number | null;
+  unit_customer_price: number;
+  subtotal_cost: number | null;
+  subtotal_customer: number;
+  sort_order: number;
+  created_at: string;
+};
