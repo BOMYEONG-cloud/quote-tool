@@ -88,23 +88,141 @@ export default function Home() {
       setErrorMessage("총액이 0보다 커야 합니다.");
       return false;
     }
+    for (const item of quoteItems) {
+      if (item.quantity <= 0) {
+        setErrorMessage("모든 견적 항목의 수량은 0보다 커야 합니다.");
+        return false;
+      }
+      if (item.is_manual) {
+        const resolvedCategory =
+          item.category === "직접입력" ? item.custom_category.trim() : item.category.trim();
+        if (!resolvedCategory) {
+          setErrorMessage("직접 입력 항목의 카테고리를 입력해 주세요.");
+          return false;
+        }
+        if (!item.customer_name.trim()) {
+          setErrorMessage("직접 입력 항목의 고객용 이름을 입력해 주세요.");
+          return false;
+        }
+        const hasCustomerPrice = item.unit_customer_price > 0;
+        const hasCostAndMargin =
+          item.unit_cost_price != null &&
+          item.unit_cost_price > 0 &&
+          item.margin_rate != null &&
+          item.margin_rate >= 0;
+        if (!hasCustomerPrice && !hasCostAndMargin) {
+          setErrorMessage("직접 입력 항목은 고객가 또는 (원가+마진율) 중 하나가 필요합니다.");
+          return false;
+        }
+      }
+    }
     return true;
   };
 
-  const buildQuoteItemPayload = (quoteId: string) =>
-    quoteItems.map((item, index) => ({
-      quote_id: quoteId,
-      price_item_id: item.price_item_id,
-      internal_name: item.internal_name,
-      customer_name: item.customer_name,
-      unit: item.unit,
-      quantity: item.quantity,
-      unit_cost_price: item.unit_cost_price,
-      unit_customer_price: item.unit_customer_price,
-      subtotal_cost: item.subtotal_cost,
-      subtotal_customer: item.subtotal_customer,
-      sort_order: index,
-    }));
+  const prepareQuoteItemsForSave = async (userId: string, quoteId: string) => {
+    const payload: Array<{
+      quote_id: string;
+      price_item_id: string | null;
+      internal_name: string;
+      customer_name: string;
+      unit: string;
+      quantity: number;
+      unit_cost_price: number | null;
+      unit_customer_price: number;
+      subtotal_cost: number | null;
+      subtotal_customer: number;
+      sort_order: number;
+    }> = [];
+
+    for (let index = 0; index < quoteItems.length; index += 1) {
+      const item = quoteItems[index];
+      let linkedPriceItemId = item.price_item_id;
+      const resolvedCategory =
+        item.category === "직접입력" ? item.custom_category.trim() : item.category.trim();
+
+      if (item.is_manual && item.save_to_price_items) {
+        const unitCustomerPrice =
+          item.unit_customer_price > 0
+            ? item.unit_customer_price
+            : item.unit_cost_price != null && item.margin_rate != null
+              ? Number((item.unit_cost_price * (1 + item.margin_rate / 100)).toFixed(2))
+              : 0;
+
+        const { data: insertedPriceItem, error: insertPriceItemError } = await supabase
+          .from("price_items")
+          .insert({
+            owner_id: userId,
+            category: resolvedCategory || "기타",
+            internal_name: item.internal_name.trim() || item.customer_name.trim(),
+            customer_name: item.customer_name.trim(),
+            unit: item.unit,
+            cost_price: item.unit_cost_price,
+            margin_rate: item.margin_rate,
+            customer_price: unitCustomerPrice,
+            memo: "견적 직접입력에서 저장됨",
+            is_active: true,
+          })
+          .select("id")
+          .single();
+
+        if (insertPriceItemError || !insertedPriceItem) {
+          throw new Error(
+            `단가표 저장 실패: ${insertPriceItemError?.message ?? "price_items insert 실패"}`
+          );
+        }
+        linkedPriceItemId = insertedPriceItem.id;
+      }
+
+      payload.push({
+        quote_id: quoteId,
+        price_item_id: linkedPriceItemId,
+        internal_name: item.internal_name.trim(),
+        customer_name: item.customer_name.trim(),
+        unit: item.unit,
+        quantity: item.quantity,
+        unit_cost_price: item.unit_cost_price,
+        unit_customer_price: item.unit_customer_price,
+        subtotal_cost: item.subtotal_cost,
+        subtotal_customer: item.subtotal_customer,
+        sort_order: index,
+      });
+    }
+
+    return payload;
+  };
+
+  const recalcQuoteItem = (item: EditableQuoteItem): EditableQuoteItem => {
+    const quantity = Number.isFinite(item.quantity) && item.quantity >= 0 ? item.quantity : 0;
+    const unitCostPrice =
+      item.unit_cost_price == null || !Number.isFinite(item.unit_cost_price)
+        ? null
+        : item.unit_cost_price;
+    const marginRate =
+      item.margin_rate == null || !Number.isFinite(item.margin_rate) ? null : item.margin_rate;
+
+    let unitCustomerPrice =
+      Number.isFinite(item.unit_customer_price) && item.unit_customer_price >= 0
+        ? item.unit_customer_price
+        : 0;
+
+    if (item.is_manual) {
+      const canDerivePrice = unitCostPrice != null && marginRate != null;
+      if (canDerivePrice && unitCustomerPrice <= 0) {
+        unitCustomerPrice = Number((unitCostPrice * (1 + marginRate / 100)).toFixed(2));
+      }
+    }
+
+    return {
+      ...item,
+      quantity,
+      unit_cost_price: unitCostPrice,
+      margin_rate: marginRate,
+      unit_customer_price: unitCustomerPrice,
+      subtotal_cost:
+        unitCostPrice == null ? null : Number((quantity * unitCostPrice).toFixed(2)),
+      subtotal_customer: Number((quantity * unitCustomerPrice).toFixed(2)),
+    };
+  };
 
   const fetchEstimates = useCallback(async () => {
     if (!session) {
@@ -166,16 +284,21 @@ export default function Home() {
 
       const mapped: EditableQuoteItem[] = (data ?? []).map((item) => ({
         client_id: item.id,
+        is_manual: item.price_item_id == null,
+        category: "기타",
+        custom_category: "",
         price_item_id: item.price_item_id,
         internal_name: item.internal_name,
         customer_name: item.customer_name,
         unit: item.unit,
         quantity: Number(item.quantity ?? 0),
         unit_cost_price: item.unit_cost_price == null ? null : Number(item.unit_cost_price),
+        margin_rate: null,
         unit_customer_price: Number(item.unit_customer_price ?? 0),
         subtotal_cost: item.subtotal_cost == null ? null : Number(item.subtotal_cost),
         subtotal_customer: Number(item.subtotal_customer ?? 0),
         sort_order: Number(item.sort_order ?? 0),
+        save_to_price_items: false,
       }));
 
       setQuoteItems(mapped);
@@ -276,7 +399,7 @@ export default function Home() {
         return;
       }
 
-      const quoteItemPayload = buildQuoteItemPayload(insertedEstimate.id);
+      const quoteItemPayload = await prepareQuoteItemsForSave(userId, insertedEstimate.id);
       const { error: insertItemsError } = await supabase.from("quote_items").insert(quoteItemPayload);
 
       if (insertItemsError) {
@@ -287,7 +410,7 @@ export default function Home() {
 
       setSuccessMessage("저장 성공! 목록을 새로 불러옵니다.");
       resetForm();
-      await fetchEstimates();
+      await Promise.all([fetchEstimates(), fetchPriceItems()]);
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -327,6 +450,13 @@ export default function Home() {
       return;
     }
 
+    const userId = session?.user?.id;
+    if (!userId) {
+      setErrorMessage("로그인이 필요합니다.");
+      setLoading(false);
+      return;
+    }
+
     try {
       const { error: updateEstimateError } = await supabase
         .from("estimates")
@@ -362,7 +492,7 @@ export default function Home() {
         return;
       }
 
-      const quoteItemPayload = buildQuoteItemPayload(editingId);
+      const quoteItemPayload = await prepareQuoteItemsForSave(userId, editingId);
       const { error: insertItemsError } = await supabase.from("quote_items").insert(quoteItemPayload);
 
       if (insertItemsError) {
@@ -372,7 +502,7 @@ export default function Home() {
 
       setSuccessMessage("수정 성공!");
       resetForm();
-      await fetchEstimates();
+      await Promise.all([fetchEstimates(), fetchPriceItems()]);
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -485,7 +615,35 @@ export default function Home() {
             setErrorMessage("로그인 후 단가표를 선택할 수 있습니다.");
             return;
           }
+          void fetchPriceItems();
           setSelectorOpen(true);
+        }}
+        onAddManualItem={() => {
+          if (!session) {
+            setErrorMessage("로그인 후 직접 입력 항목을 추가할 수 있습니다.");
+            return;
+          }
+          setQuoteItems((prev) => [
+            ...prev,
+            {
+              client_id: `manual-${Date.now()}`,
+              price_item_id: null,
+              is_manual: true,
+              category: "기타",
+              custom_category: "",
+              internal_name: "",
+              customer_name: "",
+              unit: "식",
+              quantity: 1,
+              unit_cost_price: null,
+              margin_rate: null,
+              unit_customer_price: 0,
+              subtotal_cost: null,
+              subtotal_customer: 0,
+              sort_order: prev.length,
+              save_to_price_items: false,
+            },
+          ]);
         }}
         onInsert={handleInsert}
         onUpdate={handleUpdate}
@@ -519,18 +677,11 @@ export default function Home() {
       <QuoteItemList
         items={quoteItems}
         loading={loading}
-        onQuantityChange={(clientId, quantity) => {
-          const safeQuantity = Number.isFinite(quantity) && quantity >= 0 ? quantity : 0;
+        onItemChange={(clientId, patch) => {
           setQuoteItems((prev) =>
             prev.map((item) =>
               item.client_id === clientId
-                ? {
-                    ...item,
-                    quantity: safeQuantity,
-                    subtotal_cost:
-                      item.unit_cost_price == null ? null : Number((safeQuantity * item.unit_cost_price).toFixed(2)),
-                    subtotal_customer: Number((safeQuantity * item.unit_customer_price).toFixed(2)),
-                  }
+                ? recalcQuoteItem({ ...item, ...patch })
                 : item
             )
           );
@@ -551,16 +702,21 @@ export default function Home() {
             const baseOrder = prev.length;
             const additions: EditableQuoteItem[] = selected.map((item, index) => ({
               client_id: `${item.id}-${Date.now()}-${index}`,
+              is_manual: false,
+              category: item.category ?? "기타",
+              custom_category: "",
               price_item_id: item.id,
               internal_name: item.internal_name,
               customer_name: item.customer_name,
               unit: item.unit,
               quantity: 1,
               unit_cost_price: item.cost_price,
+              margin_rate: item.margin_rate,
               unit_customer_price: item.customer_price,
               subtotal_cost: item.cost_price == null ? null : item.cost_price,
               subtotal_customer: item.customer_price,
               sort_order: baseOrder + index,
+              save_to_price_items: false,
             }));
             return [...prev, ...additions];
           });

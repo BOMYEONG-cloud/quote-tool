@@ -35,6 +35,7 @@ type EstimateFormProps = {
   onTotalAmountChange: (value: string) => void;
   onStatusChange: (value: string) => void;
   onOpenPriceItemSelector: () => void;
+  onAddManualItem: () => void;
   onInsert: () => Promise<void>;
   onUpdate: () => Promise<void>;
   onCancelEdit: () => void;
@@ -72,6 +73,7 @@ export function EstimateForm({
   onTotalAmountChange,
   onStatusChange,
   onOpenPriceItemSelector,
+  onAddManualItem,
   onInsert,
   onUpdate,
   onCancelEdit,
@@ -261,6 +263,9 @@ export function EstimateForm({
           disabled={loading}
         >
           단가표에서 선택
+        </Button>
+        <Button type="button" variant="secondary" onClick={onAddManualItem} disabled={loading}>
+          직접 입력
         </Button>
 
         <Button variant="outline" onClick={onRefresh} disabled={loading || !sessionExists}>
