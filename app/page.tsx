@@ -355,6 +355,9 @@ export default function Home() {
         onVatIncludedChange={setVatIncluded}
         onTotalAmountChange={setTotalAmount}
         onStatusChange={setStatus}
+        onOpenPriceItemSelector={() => {
+          setNeutralMessage("단가 선택 모달은 다음 단계에서 연결됩니다.");
+        }}
         onInsert={handleInsert}
         onUpdate={handleUpdate}
         onCancelEdit={() => {

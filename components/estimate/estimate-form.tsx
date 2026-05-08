@@ -34,6 +34,7 @@ type EstimateFormProps = {
   onVatIncludedChange: (value: boolean) => void;
   onTotalAmountChange: (value: string) => void;
   onStatusChange: (value: string) => void;
+  onOpenPriceItemSelector: () => void;
   onInsert: () => Promise<void>;
   onUpdate: () => Promise<void>;
   onCancelEdit: () => void;
@@ -70,6 +71,7 @@ export function EstimateForm({
   onVatIncludedChange,
   onTotalAmountChange,
   onStatusChange,
+  onOpenPriceItemSelector,
   onInsert,
   onUpdate,
   onCancelEdit,
@@ -252,6 +254,14 @@ export function EstimateForm({
             {loading ? "저장 중..." : "견적 저장"}
           </Button>
         )}
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={onOpenPriceItemSelector}
+          disabled={loading || !sessionExists}
+        >
+          단가표에서 선택
+        </Button>
 
         <Button variant="outline" onClick={onRefresh} disabled={loading || !sessionExists}>
           목록 새로고침
