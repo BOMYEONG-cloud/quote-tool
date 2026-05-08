@@ -6,7 +6,9 @@ import { Session } from "@supabase/supabase-js";
 import { AuthSection } from "@/components/auth/auth-section";
 import { EstimateForm } from "@/components/estimate/estimate-form";
 import { EstimateList } from "@/components/estimate/estimate-list";
+import { PriceItemSelector } from "@/components/estimate/price-item-selector";
 import { Estimate } from "@/components/estimate/types";
+import { PriceItem } from "@/components/price-item/types";
 import { createClient } from "@/lib/supabase/client";
 
 export default function Home() {
@@ -16,6 +18,8 @@ export default function Home() {
   const [message, setMessage] = useState("데이터를 입력하고 저장해보세요.");
   const [loading, setLoading] = useState(false);
   const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [priceItems, setPriceItems] = useState<PriceItem[]>([]);
+  const [selectorOpen, setSelectorOpen] = useState(false);
 
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -93,6 +97,26 @@ export default function Home() {
     }
 
     setEstimates((data ?? []) as Estimate[]);
+  }, [session, supabase]);
+
+  const fetchPriceItems = useCallback(async () => {
+    if (!session) {
+      setPriceItems([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("price_items")
+      .select("*")
+      .eq("is_active", true)
+      .order("usage_count", { ascending: false });
+
+    if (error) {
+      setErrorMessage(`단가표 조회 실패: ${error.message}`);
+      return;
+    }
+
+    setPriceItems((data ?? []) as PriceItem[]);
   }, [session, supabase]);
 
   const handleSignUp = async () => {
@@ -305,7 +329,8 @@ export default function Home() {
 
   useEffect(() => {
     fetchEstimates();
-  }, [fetchEstimates]);
+    fetchPriceItems();
+  }, [fetchEstimates, fetchPriceItems]);
 
   return (
     <main className="min-h-screen p-8 flex flex-col items-center gap-6">
@@ -356,7 +381,7 @@ export default function Home() {
         onTotalAmountChange={setTotalAmount}
         onStatusChange={setStatus}
         onOpenPriceItemSelector={() => {
-          setNeutralMessage("단가 선택 모달은 다음 단계에서 연결됩니다.");
+          setSelectorOpen(true);
         }}
         onInsert={handleInsert}
         onUpdate={handleUpdate}
@@ -385,6 +410,17 @@ export default function Home() {
         estimates={estimates}
         onStartEdit={handleStartEdit}
         onDelete={handleDelete}
+      />
+
+      <PriceItemSelector
+        open={selectorOpen}
+        loading={loading}
+        items={priceItems}
+        onClose={() => setSelectorOpen(false)}
+        onConfirm={(selected) => {
+          setSelectorOpen(false);
+          setNeutralMessage(`${selected.length}개 항목이 선택되었습니다. 다음 단계에서 견적 항목에 반영됩니다.`);
+        }}
       />
     </main>
   );
