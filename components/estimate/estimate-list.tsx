@@ -35,8 +35,11 @@ export function EstimateList({
                 <CardTitle className="text-base">{item.project_name}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
+                <p>견적번호: {item.quote_number ?? "-"}</p>
                 <p>고객명: {item.customer_name}</p>
-                <p>금액: {Number(item.amount || 0).toLocaleString()}원</p>
+                <p>현장명: {item.site_name ?? item.project_name}</p>
+                <p>시공종류: {item.construction_type ?? "-"}</p>
+                <p>총액: {Number(item.total_amount || 0).toLocaleString()}원</p>
                 <p>상태: {item.status}</p>
 
                 <div className="flex gap-2">

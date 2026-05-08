@@ -22,14 +22,34 @@ export default function Home() {
 
   const [customerName, setCustomerName] = useState("");
   const [projectName, setProjectName] = useState("");
-  const [amount, setAmount] = useState("");
+  const [quoteNumber, setQuoteNumber] = useState("");
+  const [siteName, setSiteName] = useState("");
+  const [constructionType, setConstructionType] = useState("");
+  const [validityDays, setValidityDays] = useState("30");
+  const [issuedDate, setIssuedDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [internalMemo, setInternalMemo] = useState("");
+  const [subtotalCustomer, setSubtotalCustomer] = useState("0");
+  const [vatAmount, setVatAmount] = useState("0");
+  const [vatIncluded, setVatIncluded] = useState(false);
+  const [totalAmount, setTotalAmount] = useState("0");
+  const [status, setStatus] = useState("임시저장");
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const resetForm = () => {
     setEditingId(null);
+    setQuoteNumber("");
     setCustomerName("");
     setProjectName("");
-    setAmount("");
+    setSiteName("");
+    setConstructionType("");
+    setValidityDays("30");
+    setIssuedDate(new Date().toISOString().slice(0, 10));
+    setInternalMemo("");
+    setSubtotalCustomer("0");
+    setVatAmount("0");
+    setVatIncluded(false);
+    setTotalAmount("0");
+    setStatus("임시저장");
   };
 
   const setErrorMessage = (nextMessage: string) => {
@@ -48,8 +68,8 @@ export default function Home() {
   };
 
   const validateForm = () => {
-    if (!customerName || !projectName || !amount || Number(amount) <= 0) {
-      setErrorMessage("고객명, 현장명, 금액(0보다 큰 값)을 모두 입력해 주세요.");
+    if (!customerName || !projectName || !totalAmount || Number(totalAmount) <= 0) {
+      setErrorMessage("고객명, 현장명, 총액(0보다 큰 값)을 모두 입력해 주세요.");
       return false;
     }
     return true;
@@ -138,10 +158,19 @@ export default function Home() {
 
     try {
       const { error } = await supabase.from("estimates").insert({
+        quote_number: quoteNumber.trim() || null,
         customer_name: customerName,
         project_name: projectName,
-        amount: Number(amount),
-        status: "draft",
+        site_name: siteName.trim() || null,
+        construction_type: constructionType.trim() || null,
+        validity_days: Number(validityDays || 30),
+        issued_date: issuedDate,
+        internal_memo: internalMemo.trim() || null,
+        subtotal_customer: Number(subtotalCustomer || 0),
+        vat_amount: Number(vatAmount || 0),
+        vat_included: vatIncluded,
+        total_amount: Number(totalAmount || 0),
+        status,
         owner_id: userId,
       });
 
@@ -164,9 +193,19 @@ export default function Home() {
 
   const handleStartEdit = (item: Estimate) => {
     setEditingId(item.id);
+    setQuoteNumber(item.quote_number ?? "");
     setCustomerName(item.customer_name);
     setProjectName(item.project_name);
-    setAmount(String(item.amount));
+    setSiteName(item.site_name ?? "");
+    setConstructionType(item.construction_type ?? "");
+    setValidityDays(String(item.validity_days ?? 30));
+    setIssuedDate(item.issued_date ?? new Date().toISOString().slice(0, 10));
+    setInternalMemo(item.internal_memo ?? "");
+    setSubtotalCustomer(String(item.subtotal_customer ?? 0));
+    setVatAmount(String(item.vat_amount ?? 0));
+    setVatIncluded(Boolean(item.vat_included));
+    setTotalAmount(String(item.total_amount ?? 0));
+    setStatus(item.status);
     setNeutralMessage("수정 모드입니다. 값을 바꾼 뒤 수정 저장을 누르세요.");
   };
 
@@ -185,9 +224,19 @@ export default function Home() {
       const { error } = await supabase
         .from("estimates")
         .update({
+          quote_number: quoteNumber.trim() || null,
           customer_name: customerName,
           project_name: projectName,
-          amount: Number(amount),
+          site_name: siteName.trim() || null,
+          construction_type: constructionType.trim() || null,
+          validity_days: Number(validityDays || 30),
+          issued_date: issuedDate,
+          internal_memo: internalMemo.trim() || null,
+          subtotal_customer: Number(subtotalCustomer || 0),
+          vat_amount: Number(vatAmount || 0),
+          vat_included: vatIncluded,
+          total_amount: Number(totalAmount || 0),
+          status,
         })
         .eq("id", editingId);
 
@@ -276,12 +325,32 @@ export default function Home() {
         sessionExists={Boolean(session)}
         loading={loading}
         editingId={editingId}
+        quoteNumber={quoteNumber}
         customerName={customerName}
         projectName={projectName}
-        amount={amount}
+        siteName={siteName}
+        constructionType={constructionType}
+        validityDays={validityDays}
+        issuedDate={issuedDate}
+        internalMemo={internalMemo}
+        subtotalCustomer={subtotalCustomer}
+        vatAmount={vatAmount}
+        vatIncluded={vatIncluded}
+        totalAmount={totalAmount}
+        status={status}
+        onQuoteNumberChange={setQuoteNumber}
         onCustomerNameChange={setCustomerName}
         onProjectNameChange={setProjectName}
-        onAmountChange={setAmount}
+        onSiteNameChange={setSiteName}
+        onConstructionTypeChange={setConstructionType}
+        onValidityDaysChange={setValidityDays}
+        onIssuedDateChange={setIssuedDate}
+        onInternalMemoChange={setInternalMemo}
+        onSubtotalCustomerChange={setSubtotalCustomer}
+        onVatAmountChange={setVatAmount}
+        onVatIncludedChange={setVatIncluded}
+        onTotalAmountChange={setTotalAmount}
+        onStatusChange={setStatus}
         onInsert={handleInsert}
         onUpdate={handleUpdate}
         onCancelEdit={() => {
