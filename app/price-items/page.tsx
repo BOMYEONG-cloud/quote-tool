@@ -4,54 +4,33 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Session } from "@supabase/supabase-js";
 import { AuthSection } from "@/components/auth/auth-section";
-import { EstimateForm } from "@/components/estimate/estimate-form";
-import { EstimateList } from "@/components/estimate/estimate-list";
-import { Estimate } from "@/components/estimate/types";
+import { PriceItemForm } from "@/components/price-item/price-item-form";
+import { PriceItemList } from "@/components/price-item/price-item-list";
+import { PriceItem } from "@/components/price-item/types";
 import { createClient } from "@/lib/supabase/client";
 
-export default function Home() {
+export default function PriceItemsPage() {
   const supabase = useMemo(() => createClient(), []);
 
   const [messageTone, setMessageTone] = useState<"neutral" | "success" | "error">("neutral");
-  const [message, setMessage] = useState("데이터를 입력하고 저장해보세요.");
+  const [message, setMessage] = useState("단가 항목을 입력하고 저장해보세요.");
   const [loading, setLoading] = useState(false);
-  const [estimates, setEstimates] = useState<Estimate[]>([]);
+  const [items, setItems] = useState<PriceItem[]>([]);
 
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
+  const [category, setCategory] = useState("");
+  const [categorySuggestions, setCategorySuggestions] = useState<string[]>([]);
+  const [internalName, setInternalName] = useState("");
   const [customerName, setCustomerName] = useState("");
-  const [projectName, setProjectName] = useState("");
-  const [quoteNumber, setQuoteNumber] = useState("");
-  const [siteName, setSiteName] = useState("");
-  const [constructionType, setConstructionType] = useState("");
-  const [validityDays, setValidityDays] = useState("30");
-  const [issuedDate, setIssuedDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [internalMemo, setInternalMemo] = useState("");
-  const [subtotalCustomer, setSubtotalCustomer] = useState("0");
-  const [vatAmount, setVatAmount] = useState("0");
-  const [vatIncluded, setVatIncluded] = useState(false);
-  const [totalAmount, setTotalAmount] = useState("0");
-  const [status, setStatus] = useState("임시저장");
+  const [unit, setUnit] = useState("m²");
+  const [costPrice, setCostPrice] = useState("");
+  const [marginRate, setMarginRate] = useState("");
+  const [customerPrice, setCustomerPrice] = useState("");
+  const [memo, setMemo] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  const resetForm = () => {
-    setEditingId(null);
-    setQuoteNumber("");
-    setCustomerName("");
-    setProjectName("");
-    setSiteName("");
-    setConstructionType("");
-    setValidityDays("30");
-    setIssuedDate(new Date().toISOString().slice(0, 10));
-    setInternalMemo("");
-    setSubtotalCustomer("0");
-    setVatAmount("0");
-    setVatIncluded(false);
-    setTotalAmount("0");
-    setStatus("임시저장");
-  };
 
   const setErrorMessage = (nextMessage: string) => {
     setMessageTone("error");
@@ -68,31 +47,79 @@ export default function Home() {
     setMessage(nextMessage);
   };
 
+  const resetForm = () => {
+    setEditingId(null);
+    setCategory("");
+    setInternalName("");
+    setCustomerName("");
+    setUnit("m²");
+    setCostPrice("");
+    setMarginRate("");
+    setCustomerPrice("");
+    setMemo("");
+  };
+
   const validateForm = () => {
-    if (!customerName || !projectName || !totalAmount || Number(totalAmount) <= 0) {
-      setErrorMessage("고객명, 현장명, 총액(0보다 큰 값)을 모두 입력해 주세요.");
+    if (!category.trim()) {
+      setErrorMessage("카테고리를 입력해 주세요.");
+      return false;
+    }
+    if (!internalName.trim() || !customerName.trim()) {
+      setErrorMessage("내부용 이름과 고객용 이름을 입력해 주세요.");
+      return false;
+    }
+    if (!customerPrice || Number(customerPrice) <= 0) {
+      setErrorMessage("고객가는 0보다 큰 값으로 입력해 주세요.");
       return false;
     }
     return true;
   };
 
-  const fetchEstimates = useCallback(async () => {
+  const fetchCategorySuggestions = useCallback(async () => {
     if (!session) {
-      setEstimates([]);
+      setCategorySuggestions([]);
       return;
     }
 
     const { data, error } = await supabase
-      .from("estimates")
+      .from("price_items")
+      .select("category")
+      .order("category", { ascending: true });
+
+    if (error) {
+      setErrorMessage(`카테고리 조회 실패: ${error.message}`);
+      return;
+    }
+
+    const uniqueCategories = Array.from(
+      new Set(
+        (data ?? [])
+          .map((row) => row.category?.trim())
+          .filter((value): value is string => Boolean(value))
+      )
+    );
+    setCategorySuggestions(uniqueCategories);
+  }, [session, supabase]);
+
+  const fetchItems = useCallback(async () => {
+    if (!session) {
+      setItems([]);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("price_items")
       .select("*")
-      .order("created_at", { ascending: false });
+      .eq("is_active", true)
+      .order("category", { ascending: true })
+      .order("usage_count", { ascending: false });
 
     if (error) {
       setErrorMessage(`목록 조회 실패: ${error.message}`);
       return;
     }
 
-    setEstimates((data ?? []) as Estimate[]);
+    setItems((data ?? []) as PriceItem[]);
   }, [session, supabase]);
 
   const handleSignUp = async () => {
@@ -102,7 +129,6 @@ export default function Home() {
     }
 
     const { error } = await supabase.auth.signUp({ email, password });
-
     if (error) {
       setErrorMessage(`회원가입 실패: ${error.message}`);
       return;
@@ -118,7 +144,6 @@ export default function Home() {
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
-
     if (error) {
       setErrorMessage(`로그인 실패: ${error.message}`);
       return;
@@ -129,14 +154,13 @@ export default function Home() {
 
   const handleSignOut = async () => {
     const { error } = await supabase.auth.signOut();
-
     if (error) {
       setErrorMessage(`로그아웃 실패: ${error.message}`);
       return;
     }
 
     setSession(null);
-    setEstimates([]);
+    setItems([]);
     resetForm();
     setSuccessMessage("로그아웃 성공!");
   };
@@ -144,7 +168,6 @@ export default function Home() {
   const handleInsert = async () => {
     setLoading(true);
     setNeutralMessage("저장 중...");
-
     if (!validateForm()) {
       setLoading(false);
       return;
@@ -158,21 +181,17 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabase.from("estimates").insert({
-        quote_number: quoteNumber.trim() || null,
-        customer_name: customerName,
-        project_name: projectName,
-        site_name: siteName.trim() || null,
-        construction_type: constructionType.trim() || null,
-        validity_days: Number(validityDays || 30),
-        issued_date: issuedDate,
-        internal_memo: internalMemo.trim() || null,
-        subtotal_customer: Number(subtotalCustomer || 0),
-        vat_amount: Number(vatAmount || 0),
-        vat_included: vatIncluded,
-        total_amount: Number(totalAmount || 0),
-        status,
+      const { error } = await supabase.from("price_items").insert({
         owner_id: userId,
+        category: category.trim(),
+        internal_name: internalName.trim(),
+        customer_name: customerName.trim(),
+        unit,
+        cost_price: costPrice ? Number(costPrice) : null,
+        margin_rate: marginRate ? Number(marginRate) : null,
+        customer_price: Number(customerPrice),
+        memo: memo.trim() || null,
+        is_active: true,
       });
 
       if (error) {
@@ -180,9 +199,9 @@ export default function Home() {
         return;
       }
 
-      setSuccessMessage("저장 성공! 목록을 새로 불러옵니다.");
+      setSuccessMessage("단가 항목 저장 성공!");
       resetForm();
-      await fetchEstimates();
+      await Promise.all([fetchItems(), fetchCategorySuggestions()]);
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -192,30 +211,23 @@ export default function Home() {
     }
   };
 
-  const handleStartEdit = (item: Estimate) => {
+  const handleStartEdit = (item: PriceItem) => {
     setEditingId(item.id);
-    setQuoteNumber(item.quote_number ?? "");
+    setCategory(item.category);
+    setInternalName(item.internal_name);
     setCustomerName(item.customer_name);
-    setProjectName(item.project_name);
-    setSiteName(item.site_name ?? "");
-    setConstructionType(item.construction_type ?? "");
-    setValidityDays(String(item.validity_days ?? 30));
-    setIssuedDate(item.issued_date ?? new Date().toISOString().slice(0, 10));
-    setInternalMemo(item.internal_memo ?? "");
-    setSubtotalCustomer(String(item.subtotal_customer ?? 0));
-    setVatAmount(String(item.vat_amount ?? 0));
-    setVatIncluded(Boolean(item.vat_included));
-    setTotalAmount(String(item.total_amount ?? 0));
-    setStatus(item.status);
+    setUnit(item.unit);
+    setCostPrice(item.cost_price == null ? "" : String(item.cost_price));
+    setMarginRate(item.margin_rate == null ? "" : String(item.margin_rate));
+    setCustomerPrice(String(item.customer_price));
+    setMemo(item.memo ?? "");
     setNeutralMessage("수정 모드입니다. 값을 바꾼 뒤 수정 저장을 누르세요.");
   };
 
   const handleUpdate = async () => {
     if (!editingId) return;
-
     setLoading(true);
     setNeutralMessage("수정 저장 중...");
-
     if (!validateForm()) {
       setLoading(false);
       return;
@@ -223,21 +235,16 @@ export default function Home() {
 
     try {
       const { error } = await supabase
-        .from("estimates")
+        .from("price_items")
         .update({
-          quote_number: quoteNumber.trim() || null,
-          customer_name: customerName,
-          project_name: projectName,
-          site_name: siteName.trim() || null,
-          construction_type: constructionType.trim() || null,
-          validity_days: Number(validityDays || 30),
-          issued_date: issuedDate,
-          internal_memo: internalMemo.trim() || null,
-          subtotal_customer: Number(subtotalCustomer || 0),
-          vat_amount: Number(vatAmount || 0),
-          vat_included: vatIncluded,
-          total_amount: Number(totalAmount || 0),
-          status,
+          category: category.trim(),
+          internal_name: internalName.trim(),
+          customer_name: customerName.trim(),
+          unit,
+          cost_price: costPrice ? Number(costPrice) : null,
+          margin_rate: marginRate ? Number(marginRate) : null,
+          customer_price: Number(customerPrice),
+          memo: memo.trim() || null,
         })
         .eq("id", editingId);
 
@@ -248,7 +255,7 @@ export default function Home() {
 
       setSuccessMessage("수정 성공!");
       resetForm();
-      await fetchEstimates();
+      await Promise.all([fetchItems(), fetchCategorySuggestions()]);
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -258,26 +265,28 @@ export default function Home() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    const shouldDelete = window.confirm("이 견적을 정말 삭제할까요?");
+  const handleSoftDelete = async (id: string) => {
+    const shouldDelete = window.confirm("이 항목을 비활성화할까요?");
     if (!shouldDelete) {
-      setNeutralMessage("삭제를 취소했습니다.");
+      setNeutralMessage("비활성화를 취소했습니다.");
       return;
     }
 
     setLoading(true);
-    setNeutralMessage("삭제 중...");
-
+    setNeutralMessage("비활성화 중...");
     try {
-      const { error } = await supabase.from("estimates").delete().eq("id", id);
+      const { error } = await supabase
+        .from("price_items")
+        .update({ is_active: false })
+        .eq("id", id);
 
       if (error) {
-        setErrorMessage(`삭제 실패: ${error.message}`);
+        setErrorMessage(`비활성화 실패: ${error.message}`);
         return;
       }
 
-      setSuccessMessage("삭제 성공!");
-      await fetchEstimates();
+      setSuccessMessage("비활성화 성공!");
+      await Promise.all([fetchItems(), fetchCategorySuggestions()]);
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -304,14 +313,15 @@ export default function Home() {
   }, [supabase]);
 
   useEffect(() => {
-    fetchEstimates();
-  }, [fetchEstimates]);
+    fetchItems();
+    fetchCategorySuggestions();
+  }, [fetchItems, fetchCategorySuggestions]);
 
   return (
     <main className="min-h-screen p-8 flex flex-col items-center gap-6">
-      <h1 className="text-3xl font-bold">안녕하세요, 견적서 SaaS 시작합니다!</h1>
-      <Link className="text-sm text-blue-600 underline" href="/price-items">
-        단가표 화면으로 이동
+      <h1 className="text-3xl font-bold">단가표 관리</h1>
+      <Link className="text-sm text-blue-600 underline" href="/">
+        견적 화면으로 이동
       </Link>
 
       <AuthSection
@@ -325,43 +335,34 @@ export default function Home() {
         onSignOut={handleSignOut}
       />
 
-      <EstimateForm
+      <PriceItemForm
         sessionExists={Boolean(session)}
         loading={loading}
         editingId={editingId}
-        quoteNumber={quoteNumber}
+        category={category}
+        categorySuggestions={categorySuggestions}
+        internalName={internalName}
         customerName={customerName}
-        projectName={projectName}
-        siteName={siteName}
-        constructionType={constructionType}
-        validityDays={validityDays}
-        issuedDate={issuedDate}
-        internalMemo={internalMemo}
-        subtotalCustomer={subtotalCustomer}
-        vatAmount={vatAmount}
-        vatIncluded={vatIncluded}
-        totalAmount={totalAmount}
-        status={status}
-        onQuoteNumberChange={setQuoteNumber}
+        unit={unit}
+        costPrice={costPrice}
+        marginRate={marginRate}
+        customerPrice={customerPrice}
+        memo={memo}
+        onCategoryChange={setCategory}
+        onInternalNameChange={setInternalName}
         onCustomerNameChange={setCustomerName}
-        onProjectNameChange={setProjectName}
-        onSiteNameChange={setSiteName}
-        onConstructionTypeChange={setConstructionType}
-        onValidityDaysChange={setValidityDays}
-        onIssuedDateChange={setIssuedDate}
-        onInternalMemoChange={setInternalMemo}
-        onSubtotalCustomerChange={setSubtotalCustomer}
-        onVatAmountChange={setVatAmount}
-        onVatIncludedChange={setVatIncluded}
-        onTotalAmountChange={setTotalAmount}
-        onStatusChange={setStatus}
+        onUnitChange={setUnit}
+        onCostPriceChange={setCostPrice}
+        onMarginRateChange={setMarginRate}
+        onCustomerPriceChange={setCustomerPrice}
+        onMemoChange={setMemo}
         onInsert={handleInsert}
         onUpdate={handleUpdate}
         onCancelEdit={() => {
           resetForm();
           setNeutralMessage("수정 모드를 취소했습니다.");
         }}
-        onRefresh={fetchEstimates}
+        onRefresh={fetchItems}
       />
 
       <p
@@ -376,13 +377,14 @@ export default function Home() {
         {message}
       </p>
 
-      <EstimateList
+      <PriceItemList
         sessionExists={Boolean(session)}
         loading={loading}
-        estimates={estimates}
+        items={items}
         onStartEdit={handleStartEdit}
-        onDelete={handleDelete}
+        onSoftDelete={handleSoftDelete}
       />
     </main>
   );
 }
+

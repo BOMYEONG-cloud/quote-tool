@@ -71,3 +71,4 @@ export function AuthSection({
     </div>
   );
 }
+
