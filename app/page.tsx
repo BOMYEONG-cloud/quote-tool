@@ -381,6 +381,10 @@ export default function Home() {
         onTotalAmountChange={setTotalAmount}
         onStatusChange={setStatus}
         onOpenPriceItemSelector={() => {
+          if (!session) {
+            setErrorMessage("로그인 후 단가표를 선택할 수 있습니다.");
+            return;
+          }
           setSelectorOpen(true);
         }}
         onInsert={handleInsert}

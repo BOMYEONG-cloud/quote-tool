@@ -258,7 +258,7 @@ export function EstimateForm({
           type="button"
           variant="secondary"
           onClick={onOpenPriceItemSelector}
-          disabled={loading || !sessionExists}
+          disabled={loading}
         >
           단가표에서 선택
         </Button>
