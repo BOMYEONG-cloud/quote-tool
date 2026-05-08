@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { PriceItem } from "@/components/price-item/types";
 
@@ -59,101 +65,146 @@ export function PriceItemSelector({
   );
 
   const toggle = (id: string) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]));
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((value) => value !== id) : [...prev, id]
+    );
+  };
+
+  const resetState = () => {
+    setSelectedIds([]);
+    setQuery("");
+    setCategoryFilter("전체");
   };
 
   const handleConfirm = () => {
     const selected = items.filter((item) => selectedIds.includes(item.id));
     onConfirm(selected);
-    setSelectedIds([]);
-    setQuery("");
-    setCategoryFilter("전체");
+    resetState();
   };
 
-  const handleClose = () => {
-    onClose();
-    setSelectedIds([]);
-    setQuery("");
-    setCategoryFilter("전체");
+  const handleOpenChange = (next: boolean) => {
+    if (!next) {
+      onClose();
+      resetState();
+    }
   };
-
-  if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-4xl rounded-lg bg-background p-4 shadow-lg">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">단가표에서 선택</h2>
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
-            닫기
-          </Button>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        showCloseButton={false}
+        className="flex max-h-[90vh] w-[calc(100%-1.5rem)] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+      >
+        <div className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <DialogTitle>단가표에서 선택</DialogTitle>
+            <DialogDescription className="mt-1">
+              체크박스로 여러 항목을 선택해 한 번에 추가할 수 있어요.
+            </DialogDescription>
+          </div>
+          <span className="shrink-0 rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">
+            선택 {selectedIds.length}개
+          </span>
         </div>
 
-        <div className="mb-4 grid gap-2 md:grid-cols-2">
-          <Input
-            placeholder="내부용 이름 / 고객용 이름 검색"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            disabled={loading}
-          />
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-            disabled={loading}
-          >
-            {categories.map((category) => (
-              <option key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
+        <div className="shrink-0 border-b border-border bg-gray-50/60 px-5 py-4">
+          <div className="grid gap-3 md:grid-cols-2">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-700">검색</p>
+              <Input
+                placeholder="내부명 또는 고객용 이름으로 검색"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                disabled={loading}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-700">카테고리</p>
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
+                disabled={loading}
+              >
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div className="max-h-[420px] space-y-4 overflow-y-auto rounded-md border p-3">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           {groupKeys.length === 0 ? (
             <p className="text-sm text-muted-foreground">조건에 맞는 단가 항목이 없습니다.</p>
           ) : (
-            groupKeys.map((category) => (
-              <div key={category} className="space-y-2">
-                <h3 className="font-medium">{category}</h3>
-                <ul className="space-y-2">
-                  {grouped[category].map((item) => (
-                    <li key={item.id} className="rounded border p-2">
-                      <label className="flex cursor-pointer items-start gap-2">
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(item.id)}
-                          onChange={() => toggle(item.id)}
-                          disabled={loading}
-                        />
-                        <div className="text-sm">
-                          <p className="font-medium">{item.customer_name}</p>
-                          <p className="text-muted-foreground">내부명: {item.internal_name}</p>
-                          <p>
-                            고객가: {Number(item.customer_price || 0).toLocaleString()}원 / {item.unit}
-                          </p>
-                          <p className="text-muted-foreground">사용횟수: {item.usage_count ?? 0}</p>
-                        </div>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))
+            <div className="space-y-4">
+              {groupKeys.map((category) => (
+                <div key={category} className="space-y-2">
+                  <div className="rounded bg-gray-100 px-2 py-1 text-sm font-semibold text-gray-900">
+                    {category}
+                  </div>
+                  <ul className="space-y-2">
+                    {grouped[category].map((item) => {
+                      const selected = selectedIds.includes(item.id);
+                      return (
+                        <li key={item.id}>
+                          <label
+                            className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors ${
+                              selected
+                                ? "border-indigo-300 bg-indigo-50/60"
+                                : "border-border bg-background hover:bg-gray-50"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={selected}
+                              onChange={() => toggle(item.id)}
+                              disabled={loading}
+                              className="mt-1"
+                            />
+                            <div className="min-w-0 flex-1 text-sm">
+                              <p className="text-base font-medium text-gray-900">
+                                {item.customer_name}
+                              </p>
+                              <p className="text-gray-500">{item.internal_name}</p>
+                              <p className="text-gray-700">
+                                고객가:{" "}
+                                {Number(item.customer_price || 0).toLocaleString()}원 / {item.unit}
+                              </p>
+                              {(item.usage_count ?? 0) > 0 ? (
+                                <p className="text-gray-500">
+                                  사용횟수 {item.usage_count}
+                                </p>
+                              ) : null}
+                            </div>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </div>
 
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
+        <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border bg-background px-5 py-4 sm:flex-row sm:justify-end">
+          <Button
+            variant="outline"
+            className="border-gray-300 text-gray-700"
+            onClick={() => handleOpenChange(false)}
+            disabled={loading}
+          >
             취소
           </Button>
           <Button onClick={handleConfirm} disabled={loading || selectedIds.length === 0}>
-            선택한 {selectedIds.length}개 추가
+            선택한 {selectedIds.length}개 추가하기
           </Button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
-
