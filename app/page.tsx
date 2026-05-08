@@ -7,6 +7,7 @@ import { AuthSection } from "@/components/auth/auth-section";
 import { EstimateForm } from "@/components/estimate/estimate-form";
 import { EstimateList } from "@/components/estimate/estimate-list";
 import { PriceItemSelector } from "@/components/estimate/price-item-selector";
+import { EditableQuoteItem, QuoteItemList } from "@/components/estimate/quote-item-list";
 import { Estimate } from "@/components/estimate/types";
 import { PriceItem } from "@/components/price-item/types";
 import { createClient } from "@/lib/supabase/client";
@@ -20,6 +21,7 @@ export default function Home() {
   const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [priceItems, setPriceItems] = useState<PriceItem[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const [quoteItems, setQuoteItems] = useState<EditableQuoteItem[]>([]);
 
   const [session, setSession] = useState<Session | null>(null);
   const [email, setEmail] = useState("");
@@ -55,6 +57,7 @@ export default function Home() {
     setVatIncluded(false);
     setTotalAmount("0");
     setStatus("임시저장");
+    setQuoteItems([]);
   };
 
   const setErrorMessage = (nextMessage: string) => {
@@ -73,12 +76,35 @@ export default function Home() {
   };
 
   const validateForm = () => {
-    if (!customerName || !projectName || !totalAmount || Number(totalAmount) <= 0) {
-      setErrorMessage("고객명, 현장명, 총액(0보다 큰 값)을 모두 입력해 주세요.");
+    if (!customerName || !projectName) {
+      setErrorMessage("고객명, 현장명을 모두 입력해 주세요.");
+      return false;
+    }
+    if (quoteItems.length === 0) {
+      setErrorMessage("견적 항목을 최소 1개 이상 추가해 주세요.");
+      return false;
+    }
+    if (!totalAmount || Number(totalAmount) <= 0) {
+      setErrorMessage("총액이 0보다 커야 합니다.");
       return false;
     }
     return true;
   };
+
+  const buildQuoteItemPayload = (quoteId: string) =>
+    quoteItems.map((item, index) => ({
+      quote_id: quoteId,
+      price_item_id: item.price_item_id,
+      internal_name: item.internal_name,
+      customer_name: item.customer_name,
+      unit: item.unit,
+      quantity: item.quantity,
+      unit_cost_price: item.unit_cost_price,
+      unit_customer_price: item.unit_customer_price,
+      subtotal_cost: item.subtotal_cost,
+      subtotal_customer: item.subtotal_customer,
+      sort_order: index,
+    }));
 
   const fetchEstimates = useCallback(async () => {
     if (!session) {
@@ -99,6 +125,12 @@ export default function Home() {
     setEstimates((data ?? []) as Estimate[]);
   }, [session, supabase]);
 
+  useEffect(() => {
+    const nextSubtotal = quoteItems.reduce((acc, item) => acc + (item.subtotal_customer || 0), 0);
+    setSubtotalCustomer(String(nextSubtotal));
+    setTotalAmount(String(nextSubtotal));
+  }, [quoteItems]);
+
   const fetchPriceItems = useCallback(async () => {
     if (!session) {
       setPriceItems([]);
@@ -118,6 +150,38 @@ export default function Home() {
 
     setPriceItems((data ?? []) as PriceItem[]);
   }, [session, supabase]);
+
+  const loadQuoteItems = useCallback(
+    async (quoteId: string) => {
+      const { data, error } = await supabase
+        .from("quote_items")
+        .select("*")
+        .eq("quote_id", quoteId)
+        .order("sort_order", { ascending: true });
+
+      if (error) {
+        setErrorMessage(`견적 항목 조회 실패: ${error.message}`);
+        return;
+      }
+
+      const mapped: EditableQuoteItem[] = (data ?? []).map((item) => ({
+        client_id: item.id,
+        price_item_id: item.price_item_id,
+        internal_name: item.internal_name,
+        customer_name: item.customer_name,
+        unit: item.unit,
+        quantity: Number(item.quantity ?? 0),
+        unit_cost_price: item.unit_cost_price == null ? null : Number(item.unit_cost_price),
+        unit_customer_price: Number(item.unit_customer_price ?? 0),
+        subtotal_cost: item.subtotal_cost == null ? null : Number(item.subtotal_cost),
+        subtotal_customer: Number(item.subtotal_customer ?? 0),
+        sort_order: Number(item.sort_order ?? 0),
+      }));
+
+      setQuoteItems(mapped);
+    },
+    [supabase]
+  );
 
   const handleSignUp = async () => {
     if (!email || !password) {
@@ -182,25 +246,42 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabase.from("estimates").insert({
-        quote_number: quoteNumber.trim() || null,
-        customer_name: customerName,
-        project_name: projectName,
-        site_name: siteName.trim() || null,
-        construction_type: constructionType.trim() || null,
-        validity_days: Number(validityDays || 30),
-        issued_date: issuedDate,
-        internal_memo: internalMemo.trim() || null,
-        subtotal_customer: Number(subtotalCustomer || 0),
-        vat_amount: Number(vatAmount || 0),
-        vat_included: vatIncluded,
-        total_amount: Number(totalAmount || 0),
-        status,
-        owner_id: userId,
-      });
+      const { data: insertedEstimate, error: insertEstimateError } = await supabase
+        .from("estimates")
+        .insert({
+          quote_number: quoteNumber.trim() || null,
+          customer_name: customerName,
+          project_name: projectName,
+          site_name: siteName.trim() || null,
+          construction_type: constructionType.trim() || null,
+          validity_days: Number(validityDays || 30),
+          issued_date: issuedDate,
+          internal_memo: internalMemo.trim() || null,
+          subtotal_customer: Number(subtotalCustomer || 0),
+          vat_amount: Number(vatAmount || 0),
+          vat_included: vatIncluded,
+          total_amount: Number(totalAmount || 0),
+          status,
+          owner_id: userId,
+        })
+        .select("id")
+        .single();
 
-      if (error) {
-        setErrorMessage(`저장 실패: ${error.message} (code: ${error.code ?? "없음"})`);
+      if (insertEstimateError || !insertedEstimate) {
+        setErrorMessage(
+          `저장 실패: ${insertEstimateError?.message ?? "견적 헤더 생성 실패"} (code: ${
+            insertEstimateError?.code ?? "없음"
+          })`
+        );
+        return;
+      }
+
+      const quoteItemPayload = buildQuoteItemPayload(insertedEstimate.id);
+      const { error: insertItemsError } = await supabase.from("quote_items").insert(quoteItemPayload);
+
+      if (insertItemsError) {
+        await supabase.from("estimates").delete().eq("id", insertedEstimate.id);
+        setErrorMessage(`저장 실패(항목): ${insertItemsError.message}`);
         return;
       }
 
@@ -231,6 +312,7 @@ export default function Home() {
     setVatIncluded(Boolean(item.vat_included));
     setTotalAmount(String(item.total_amount ?? 0));
     setStatus(item.status);
+    void loadQuoteItems(item.id);
     setNeutralMessage("수정 모드입니다. 값을 바꾼 뒤 수정 저장을 누르세요.");
   };
 
@@ -246,7 +328,7 @@ export default function Home() {
     }
 
     try {
-      const { error } = await supabase
+      const { error: updateEstimateError } = await supabase
         .from("estimates")
         .update({
           quote_number: quoteNumber.trim() || null,
@@ -265,8 +347,26 @@ export default function Home() {
         })
         .eq("id", editingId);
 
-      if (error) {
-        setErrorMessage(`수정 실패: ${error.message}`);
+      if (updateEstimateError) {
+        setErrorMessage(`수정 실패: ${updateEstimateError.message}`);
+        return;
+      }
+
+      const { error: deleteItemsError } = await supabase
+        .from("quote_items")
+        .delete()
+        .eq("quote_id", editingId);
+
+      if (deleteItemsError) {
+        setErrorMessage(`수정 실패(기존 항목 삭제): ${deleteItemsError.message}`);
+        return;
+      }
+
+      const quoteItemPayload = buildQuoteItemPayload(editingId);
+      const { error: insertItemsError } = await supabase.from("quote_items").insert(quoteItemPayload);
+
+      if (insertItemsError) {
+        setErrorMessage(`수정 실패(항목 저장): ${insertItemsError.message}`);
         return;
       }
 
@@ -416,6 +516,30 @@ export default function Home() {
         onDelete={handleDelete}
       />
 
+      <QuoteItemList
+        items={quoteItems}
+        loading={loading}
+        onQuantityChange={(clientId, quantity) => {
+          const safeQuantity = Number.isFinite(quantity) && quantity >= 0 ? quantity : 0;
+          setQuoteItems((prev) =>
+            prev.map((item) =>
+              item.client_id === clientId
+                ? {
+                    ...item,
+                    quantity: safeQuantity,
+                    subtotal_cost:
+                      item.unit_cost_price == null ? null : Number((safeQuantity * item.unit_cost_price).toFixed(2)),
+                    subtotal_customer: Number((safeQuantity * item.unit_customer_price).toFixed(2)),
+                  }
+                : item
+            )
+          );
+        }}
+        onRemove={(clientId) => {
+          setQuoteItems((prev) => prev.filter((item) => item.client_id !== clientId));
+        }}
+      />
+
       <PriceItemSelector
         open={selectorOpen}
         loading={loading}
@@ -423,7 +547,24 @@ export default function Home() {
         onClose={() => setSelectorOpen(false)}
         onConfirm={(selected) => {
           setSelectorOpen(false);
-          setNeutralMessage(`${selected.length}개 항목이 선택되었습니다. 다음 단계에서 견적 항목에 반영됩니다.`);
+          setQuoteItems((prev) => {
+            const baseOrder = prev.length;
+            const additions: EditableQuoteItem[] = selected.map((item, index) => ({
+              client_id: `${item.id}-${Date.now()}-${index}`,
+              price_item_id: item.id,
+              internal_name: item.internal_name,
+              customer_name: item.customer_name,
+              unit: item.unit,
+              quantity: 1,
+              unit_cost_price: item.cost_price,
+              unit_customer_price: item.customer_price,
+              subtotal_cost: item.cost_price == null ? null : item.cost_price,
+              subtotal_customer: item.customer_price,
+              sort_order: baseOrder + index,
+            }));
+            return [...prev, ...additions];
+          });
+          setNeutralMessage(`${selected.length}개 항목이 견적에 추가되었습니다.`);
         }}
       />
     </main>
