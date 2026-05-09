@@ -84,6 +84,7 @@ export default function QuotesPage() {
     const { data, error } = await supabase
       .from("estimates")
       .select("*")
+      .order("updated_at", { ascending: false })
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -149,9 +150,10 @@ export default function QuotesPage() {
     setLoading(true);
     setNeutralMessage("상태 변경 중...");
     try {
+      const nowIso = new Date().toISOString();
       const { error } = await supabase
         .from("estimates")
-        .update({ status: nextStatus })
+        .update({ status: nextStatus, updated_at: nowIso })
         .eq("id", statusTarget.id);
 
       if (error) {
@@ -159,11 +161,9 @@ export default function QuotesPage() {
         return;
       }
 
-      setEstimates((prev) =>
-        prev.map((it) => (it.id === statusTarget.id ? { ...it, status: nextStatus } : it))
-      );
       setStatusDialogOpen(false);
       setSuccessMessage("상태가 변경되었습니다.");
+      await fetchEstimates();
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`

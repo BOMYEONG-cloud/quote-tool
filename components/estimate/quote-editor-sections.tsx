@@ -5,6 +5,7 @@ import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { EditableQuoteItem, QuoteItemList } from "@/components/estimate/quote-item-list";
 import { cn } from "@/lib/utils";
 
@@ -282,21 +283,25 @@ export function TotalsSection({
   totalAmount,
   onVatIncludedChange,
 }: TotalsSectionProps) {
+  // UI 라벨은 "부가세 별도". 내부 vatIncluded(true=총액에 VAT 포함)와 반대.
+  const vatExcluded = !vatIncluded;
   return (
     <section className="space-y-4" aria-labelledby="quote-section-totals">
       <h3 id="quote-section-totals" className="text-base font-semibold text-gray-900">
         합계
       </h3>
-      <Label htmlFor="vatIncluded" className="flex items-center gap-2 text-sm">
-        <input
-          id="vatIncluded"
-          type="checkbox"
-          checked={vatIncluded}
-          onChange={(e) => onVatIncludedChange(e.target.checked)}
+      <div className="flex items-center justify-between gap-3">
+        <Label htmlFor="vatExcluded" className="text-sm font-medium text-gray-900">
+          부가세 별도
+        </Label>
+        <Switch
+          id="vatExcluded"
+          checked={vatExcluded}
+          onCheckedChange={(next) => onVatIncludedChange(!next)}
           disabled={!sessionExists}
+          aria-label="부가세 별도 여부"
         />
-        부가세 포함 견적
-      </Label>
+      </div>
 
       <div className="space-y-2 rounded-md bg-white p-4 ring-1 ring-indigo-200">
         <div className="flex items-center justify-between text-sm">

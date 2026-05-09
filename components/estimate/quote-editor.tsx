@@ -432,7 +432,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       }
 
       setSuccessMessage("저장 성공!");
-      router.push(`/quotes/${insertedEstimate.id}`);
+      router.push("/quotes");
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -477,6 +477,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
           vat_included: vatIncluded,
           total_amount: Number(totalAmount || 0),
           status,
+          updated_at: new Date().toISOString(),
         })
         .eq("id", editingId);
 
@@ -504,6 +505,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       }
 
       setSuccessMessage("수정 성공!");
+      router.push("/quotes");
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -626,7 +628,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       <div className="flex items-center justify-between gap-3">
         <h1 className="truncate text-2xl font-semibold text-gray-900">{editorTitle}</h1>
         <Button variant="outline" onClick={() => router.push("/quotes")} disabled={loading}>
-          목록으로
+          목록
         </Button>
       </div>
 
