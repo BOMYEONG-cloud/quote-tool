@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Estimate } from "@/components/estimate/types";
+import { formatHistoryDateTime } from "@/lib/estimate-history";
 import { cn } from "@/lib/utils";
 
 type EstimateListProps = {
@@ -14,6 +15,7 @@ type EstimateListProps = {
   onStartEdit: (item: Estimate) => void;
   onDelete: (id: string) => Promise<void>;
   onStatusClick?: (item: Estimate) => void;
+  onOpenHistory?: (item: Estimate) => void;
 };
 
 const statusBadgeClass: Record<string, string> = {
@@ -65,6 +67,7 @@ export function EstimateList({
   onStartEdit,
   onDelete,
   onStatusClick,
+  onOpenHistory,
 }: EstimateListProps) {
   return (
     <section className="w-full max-w-2xl">
@@ -81,11 +84,16 @@ export function EstimateList({
               <li key={item.id}>
                 <Card>
                   <CardContent className="space-y-3">
-                    <StatusBadge
-                      status={item.status}
-                      disabled={loading}
-                      onClick={onStatusClick ? () => onStatusClick(item) : undefined}
-                    />
+                    <div className="flex items-center justify-between gap-2">
+                      <StatusBadge
+                        status={item.status}
+                        disabled={loading}
+                        onClick={onStatusClick ? () => onStatusClick(item) : undefined}
+                      />
+                      <span className="text-xs text-gray-500 tabular-nums">
+                        {item.quote_number?.trim() ? item.quote_number : "견적번호 미입력"}
+                      </span>
+                    </div>
 
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <p className="min-w-0 flex-1 text-lg font-semibold text-gray-900">
@@ -103,9 +111,19 @@ export function EstimateList({
                     <Separator />
 
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-xs text-gray-500 tabular-nums">
-                        {item.quote_number?.trim() ? item.quote_number : "견적번호 미입력"}
-                      </span>
+                      {onOpenHistory ? (
+                        <button
+                          type="button"
+                          onClick={() => onOpenHistory(item)}
+                          className="text-xs text-gray-500 underline-offset-2 hover:underline tabular-nums"
+                        >
+                          최근 업데이트 {formatHistoryDateTime(item.updated_at)}
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-500 tabular-nums">
+                          최근 업데이트 {formatHistoryDateTime(item.updated_at)}
+                        </span>
+                      )}
                       <div className="flex flex-wrap justify-end gap-2">
                         <Button asChild variant="default" size="sm">
                           <Link href={`/quotes/${item.id}/preview`}>견적서 보기</Link>

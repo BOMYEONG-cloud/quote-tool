@@ -66,6 +66,7 @@ export function QuoteSteps({ steps }: QuoteStepsProps) {
 
 type SiteInfoSectionProps = {
   sessionExists: boolean;
+  statusLocked?: boolean;
   quoteNumber: string;
   customerName: string;
   projectName: string;
@@ -86,6 +87,7 @@ type SiteInfoSectionProps = {
 
 export function SiteInfoSection({
   sessionExists,
+  statusLocked = false,
   quoteNumber,
   customerName,
   projectName,
@@ -110,7 +112,9 @@ export function SiteInfoSection({
       </h3>
       <div className="grid gap-3 md:grid-cols-2">
           <div className="space-y-2">
-            <Label htmlFor="customerName">고객명</Label>
+            <Label htmlFor="customerName">
+              고객명 <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="customerName"
               value={customerName}
@@ -120,7 +124,9 @@ export function SiteInfoSection({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="projectName">현장명</Label>
+            <Label htmlFor="projectName">
+              현장명 <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="projectName"
               value={projectName}
@@ -130,7 +136,7 @@ export function SiteInfoSection({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="siteName">세부 현장명 (선택)</Label>
+            <Label htmlFor="siteName">세부 현장명</Label>
             <Input
               id="siteName"
               value={siteName}
@@ -140,7 +146,7 @@ export function SiteInfoSection({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="constructionType">시공 종류 (선택)</Label>
+            <Label htmlFor="constructionType">시공 종류</Label>
             <Input
               id="constructionType"
               value={constructionType}
@@ -150,13 +156,18 @@ export function SiteInfoSection({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="status">상태</Label>
+            <Label htmlFor="status">
+              상태 <span className="text-red-500">*</span>
+            </Label>
             <select
               id="status"
               value={status}
               onChange={(e) => onStatusChange(e.target.value)}
-              disabled={!sessionExists}
-              className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
+              disabled={!sessionExists || statusLocked}
+              className={cn(
+                "h-12 w-full rounded-md border border-input px-3 text-base",
+                statusLocked ? "cursor-not-allowed bg-gray-100 text-gray-500" : "bg-background"
+              )}
             >
               <option value="임시저장">임시저장</option>
               <option value="발송됨">발송됨</option>
@@ -166,7 +177,9 @@ export function SiteInfoSection({
             </select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="validityDays">유효일수</Label>
+            <Label htmlFor="validityDays">
+              유효일수 <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="validityDays"
               type="number"
@@ -177,7 +190,9 @@ export function SiteInfoSection({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="issuedDate">발행일</Label>
+            <Label htmlFor="issuedDate">
+              발행일 <span className="text-red-500">*</span>
+            </Label>
             <Input
               id="issuedDate"
               type="date"
@@ -187,7 +202,7 @@ export function SiteInfoSection({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="quoteNumber">견적번호 (선택)</Label>
+            <Label htmlFor="quoteNumber">견적번호</Label>
             <Input
               id="quoteNumber"
               value={quoteNumber}
@@ -205,6 +220,8 @@ type ItemsSectionProps = {
   sessionExists: boolean;
   loading: boolean;
   items: EditableQuoteItem[];
+  categoryOptions: string[];
+  marginFlatAmount?: number;
   onOpenSelector: () => void;
   onAddManual: () => void;
   onItemChange: (clientId: string, patch: Partial<EditableQuoteItem>) => void;
@@ -217,6 +234,8 @@ export function ItemsSection({
   sessionExists,
   loading,
   items,
+  categoryOptions,
+  marginFlatAmount = 0,
   onOpenSelector,
   onAddManual,
   onItemChange,
@@ -232,30 +251,89 @@ export function ItemsSection({
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
+          className="bg-indigo-600 text-white hover:bg-indigo-700"
+          disabled={loading || !sessionExists}
+          onClick={onAddManual}
+        >
+          단가 입력
+        </Button>
+        <Button
+          type="button"
           variant="secondary"
           disabled={loading || !sessionExists}
           onClick={onOpenSelector}
         >
           단가표에서 선택
         </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={loading || !sessionExists}
-          onClick={onAddManual}
-        >
-          직접 입력
-        </Button>
       </div>
 
       <QuoteItemList
         items={items}
+        categoryOptions={categoryOptions}
+        marginFlatAmount={marginFlatAmount}
         loading={loading}
         onItemChange={onItemChange}
         onRemove={onRemove}
         onMove={onMove}
         embedded={embedded}
       />
+    </section>
+  );
+}
+
+type MarginFlatSectionProps = {
+  sessionExists: boolean;
+  disabled: boolean;
+  marginFlat: string;
+  marginPercentHint: string | null;
+  onMarginFlatChange: (value: string) => void;
+};
+
+export function MarginFlatSection({
+  sessionExists,
+  disabled,
+  marginFlat,
+  marginPercentHint,
+  onMarginFlatChange,
+}: MarginFlatSectionProps) {
+  return (
+    <section className="space-y-2" aria-labelledby="quote-margin-flat">
+      <h3 id="quote-margin-flat" className="text-base font-semibold text-gray-900">
+        일괄 마진
+      </h3>
+      <p className="text-sm text-muted-foreground">
+        입력한 금액만큼 고객 합계에 더해지며, 각 행은{" "}
+        <strong className="font-medium text-gray-800">수량 비례로</strong> 같은 비율로 나뉘어 소계에
+        더해집니다.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-full max-w-xs space-y-1.5">
+          <label htmlFor="marginFlatAmount" className="text-sm font-medium text-gray-900">
+            마진금액(원)
+          </label>
+          <Input
+            id="marginFlatAmount"
+            type="number"
+            inputMode="numeric"
+            min="0"
+            step="1"
+            placeholder="예: 100000"
+            value={marginFlat}
+            onChange={(e) => onMarginFlatChange(e.target.value)}
+            disabled={!sessionExists || disabled}
+            className="max-w-xs tabular-nums"
+          />
+        </div>
+        <p className="pb-2 text-sm tabular-nums text-indigo-700">
+          {marginPercentHint ? (
+            <>
+              공급가 대비 <span className="font-semibold">{marginPercentHint}%</span> 추가
+            </>
+          ) : (
+            "공급가 대비 0% 추가"
+          )}
+        </p>
+      </div>
     </section>
   );
 }
@@ -314,9 +392,37 @@ export function TotalsSection({
         </div>
         <div className="mt-1 flex items-baseline justify-between border-t border-indigo-100 pt-3">
           <span className="text-sm font-medium text-gray-900">총액</span>
-          <span className="text-2xl font-bold text-primary">{formatKRW(totalAmount)}원</span>
+          <span className="text-2xl font-bold text-indigo-700">{formatKRW(totalAmount)}원</span>
         </div>
       </div>
+    </section>
+  );
+}
+
+type PublicNotesSectionProps = {
+  sessionExists: boolean;
+  customerNotes: string;
+  onCustomerNotesChange: (value: string) => void;
+};
+
+export function PublicNotesSection({
+  sessionExists,
+  customerNotes,
+  onCustomerNotesChange,
+}: PublicNotesSectionProps) {
+  return (
+    <section className="space-y-4" aria-labelledby="quote-public-notes">
+      <h3 id="quote-public-notes" className="text-base font-semibold text-gray-900">
+        비고(견적서 하단에 노출됩니다)
+      </h3>
+      <textarea
+        value={customerNotes}
+        onChange={(e) => onCustomerNotesChange(e.target.value)}
+        disabled={!sessionExists}
+        rows={5}
+        placeholder={`예시)\n계좌번호: OO은행 123-456-789012 예금주 ㈜OOO\n선금 30% 후 시공 시작, 잔금 70% 검수 후 7영업일 이내\n유효기간 내 진행 안 시 재견 필요`}
+        className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+      />
     </section>
   );
 }
@@ -335,19 +441,16 @@ export function MemoSection({
   return (
     <section className="space-y-4" aria-labelledby="quote-section-memo">
       <h3 id="quote-section-memo" className="text-base font-semibold text-gray-900">
-        메모
+        내부 메모(선택)
       </h3>
-      <div className="space-y-2">
-        <Label htmlFor="internalMemo">내부 메모 (선택)</Label>
-        <textarea
-          id="internalMemo"
-          value={internalMemo}
-          onChange={(e) => onInternalMemoChange(e.target.value)}
-          placeholder="내부 참고 내용을 입력하세요."
-          disabled={!sessionExists}
-          className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-        />
-      </div>
+      <textarea
+        id="internalMemo"
+        value={internalMemo}
+        onChange={(e) => onInternalMemoChange(e.target.value)}
+        placeholder="내부 참고 내용을 입력하세요."
+        disabled={!sessionExists}
+        className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+      />
     </section>
   );
 }

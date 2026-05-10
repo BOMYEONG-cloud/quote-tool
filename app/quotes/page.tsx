@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
+import {
+  EstimateHistoryDialog,
+} from "@/components/estimate/estimate-history-dialog";
 import { EstimateList } from "@/components/estimate/estimate-list";
 import {
   ESTIMATE_STATUS_OPTIONS,
@@ -12,6 +15,8 @@ import {
   EstimateStatusDialog,
 } from "@/components/estimate/estimate-status-dialog";
 import { Estimate } from "@/components/estimate/types";
+import type { EstimateHistory } from "@/components/estimate/types";
+import { insertEstimateHistory } from "@/lib/estimate-history";
 import { cn } from "@/lib/utils";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
 import { createClient } from "@/lib/supabase/client";
@@ -61,6 +66,10 @@ export default function QuotesPage() {
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<Estimate | null>(null);
+  const [historyDialogOpen, setHistoryDialogOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<Estimate | null>(null);
+  const [historyItems, setHistoryItems] = useState<EstimateHistory[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const setErrorMessage = (next: string) => {
     setMessageTone("error");
@@ -161,6 +170,18 @@ export default function QuotesPage() {
         return;
       }
 
+      const ownerId = session?.user?.id;
+      if (ownerId) {
+        await insertEstimateHistory({
+          supabase,
+          quoteId: statusTarget.id,
+          ownerId,
+          action: "상태 변경",
+          note: `상태 변경: ${statusTarget.status} -> ${nextStatus}`,
+          snapshot: { from: statusTarget.status, to: nextStatus },
+        });
+      }
+
       setStatusDialogOpen(false);
       setSuccessMessage("상태가 변경되었습니다.");
       await fetchEstimates();
@@ -170,6 +191,28 @@ export default function QuotesPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openHistory = async (estimate: Estimate) => {
+    setHistoryTarget(estimate);
+    setHistoryDialogOpen(true);
+    setHistoryLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from("estimate_histories")
+        .select("*")
+        .eq("quote_id", estimate.id)
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) {
+        setErrorMessage(`히스토리 조회 실패: ${error.message}`);
+        setHistoryItems([]);
+        return;
+      }
+      setHistoryItems((data ?? []) as EstimateHistory[]);
+    } finally {
+      setHistoryLoading(false);
     }
   };
 
@@ -279,6 +322,7 @@ export default function QuotesPage() {
         onStartEdit={(item) => router.push(`/quotes/${item.id}`)}
         onDelete={handleDelete}
         onStatusClick={handleStatusClick}
+        onOpenHistory={(item) => void openHistory(item)}
       />
 
       <EstimateStatusDialog
@@ -292,6 +336,24 @@ export default function QuotesPage() {
         currentStatus={statusTarget?.status ?? ""}
         estimateLabel={targetLabel}
         onSubmit={handleStatusSubmit}
+      />
+
+      <EstimateHistoryDialog
+        open={historyDialogOpen}
+        onOpenChange={(next) => {
+          setHistoryDialogOpen(next);
+          if (!next) {
+            setHistoryTarget(null);
+            setHistoryItems([]);
+          }
+        }}
+        title={
+          historyTarget
+            ? `${historyTarget.project_name?.trim() || "견적"} 수정 히스토리`
+            : "수정 히스토리"
+        }
+        items={historyItems}
+        loading={historyLoading}
       />
     </main>
   );

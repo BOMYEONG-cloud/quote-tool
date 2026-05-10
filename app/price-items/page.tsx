@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { PriceItemDialog } from "@/components/price-item/price-item-dialog";
 import { PriceItemList } from "@/components/price-item/price-item-list";
 import { PriceItem } from "@/components/price-item/types";
+import { unitMarginPercent } from "@/lib/quote-margin";
 import { cn } from "@/lib/utils";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
 import { createClient } from "@/lib/supabase/client";
@@ -33,7 +34,6 @@ export default function PriceItemsPage() {
   const [customerName, setCustomerName] = useState("");
   const [unit, setUnit] = useState("m²");
   const [costPrice, setCostPrice] = useState("");
-  const [marginRate, setMarginRate] = useState("");
   const [customerPrice, setCustomerPrice] = useState("");
   const [memo, setMemo] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,7 +60,6 @@ export default function PriceItemsPage() {
     setCustomerName("");
     setUnit("m²");
     setCostPrice("");
-    setMarginRate("");
     setCustomerPrice("");
     setMemo("");
   };
@@ -148,7 +147,6 @@ export default function PriceItemsPage() {
     setCustomerName(item.customer_name);
     setUnit(item.unit);
     setCostPrice(item.cost_price == null ? "" : String(item.cost_price));
-    setMarginRate(item.margin_rate == null ? "" : String(item.margin_rate));
     setCustomerPrice(String(item.customer_price));
     setMemo(item.memo ?? "");
     setNeutralMessage("");
@@ -167,6 +165,11 @@ export default function PriceItemsPage() {
     setLoading(true);
     setNeutralMessage(editingId ? "수정 저장 중..." : "저장 중...");
 
+    const derivedMarginRate = unitMarginPercent(
+      Number(customerPrice || 0),
+      costPrice === "" ? null : Number(costPrice)
+    );
+
     try {
       if (editingId) {
         const { error } = await supabase
@@ -177,7 +180,7 @@ export default function PriceItemsPage() {
             customer_name: customerName.trim(),
             unit,
             cost_price: costPrice ? Number(costPrice) : null,
-            margin_rate: marginRate ? Number(marginRate) : null,
+            margin_rate: derivedMarginRate,
             customer_price: Number(customerPrice),
             memo: memo.trim() || null,
           })
@@ -196,7 +199,7 @@ export default function PriceItemsPage() {
           customer_name: customerName.trim(),
           unit,
           cost_price: costPrice ? Number(costPrice) : null,
-          margin_rate: marginRate ? Number(marginRate) : null,
+          margin_rate: derivedMarginRate,
           customer_price: Number(customerPrice),
           memo: memo.trim() || null,
           is_active: true,
@@ -302,6 +305,15 @@ export default function PriceItemsPage() {
     );
   }, [items, activeCategory]);
 
+  const derivedMarginRate = useMemo(
+    () =>
+      unitMarginPercent(
+        Number(customerPrice || 0),
+        costPrice === "" ? null : Number(costPrice)
+      ),
+    [customerPrice, costPrice]
+  );
+
   return (
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -391,7 +403,7 @@ export default function PriceItemsPage() {
         customerName={customerName}
         unit={unit}
         costPrice={costPrice}
-        marginRate={marginRate}
+        marginRate={derivedMarginRate}
         customerPrice={customerPrice}
         memo={memo}
         onCategoryChange={setCategory}
@@ -399,7 +411,6 @@ export default function PriceItemsPage() {
         onCustomerNameChange={setCustomerName}
         onUnitChange={setUnit}
         onCostPriceChange={setCostPrice}
-        onMarginRateChange={setMarginRate}
         onCustomerPriceChange={setCustomerPrice}
         onMemoChange={setMemo}
         onSubmit={handleSubmit}

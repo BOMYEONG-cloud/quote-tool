@@ -4,9 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { Menu, NotebookPen, X } from "lucide-react";
+import { ChevronDown, Menu, NotebookPen, X } from "lucide-react";
 import { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { createClient } from "@/lib/supabase/client";
 
@@ -95,15 +103,37 @@ export function Header() {
         <div className="hidden items-center gap-2 md:flex">
           {session ? (
             <>
-              <span className="max-w-64 truncate text-sm text-muted-foreground">
-                {session.user.email}
-              </span>
-              <Button asChild variant="ghost" size="sm" className="text-gray-700">
-                <Link href="/settings">설정</Link>
-              </Button>
-              <Button variant="outline" size="sm" onClick={handleSignOut} disabled={loading}>
-                로그아웃
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="max-w-64 gap-1 text-gray-800"
+                    disabled={loading}
+                  >
+                    <span className="truncate">{session.user.email}</span>
+                    <ChevronDown className="size-4 shrink-0 opacity-70" aria-hidden />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-48">
+                  <DropdownMenuLabel className="max-w-64 truncate font-normal text-muted-foreground">
+                    {session.user.email}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/settings/company">회사 정보</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onSelect={(ev) => {
+                      ev.preventDefault();
+                      void handleSignOut();
+                    }}
+                  >
+                    로그아웃
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </>
           ) : !isLoginPage ? (
             <Button asChild size="sm">
@@ -187,8 +217,8 @@ export function Header() {
                         {session.user.email}
                       </p>
                       <Button asChild variant="outline">
-                        <Link href="/settings" onClick={() => setMenuOpen(false)}>
-                          설정
+                        <Link href="/settings/company" onClick={() => setMenuOpen(false)}>
+                          회사 정보
                         </Link>
                       </Button>
                       <Button onClick={handleSignOut} disabled={loading} variant="outline">

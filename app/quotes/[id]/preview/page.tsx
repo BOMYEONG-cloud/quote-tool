@@ -8,8 +8,9 @@ import type { Estimate, QuoteItem } from "@/components/estimate/types";
 import { CompanyNameHint } from "@/components/profile/company-name-hint";
 import { Button } from "@/components/ui/button";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
+import { fetchCompanyByUserId, type CompanyRow } from "@/lib/company";
+import { createSignedCompanyAssetUrl } from "@/lib/company-assets";
 import { createClient } from "@/lib/supabase/client";
-import { fetchUserProfileCompany } from "@/lib/user-profile";
 
 type PreviewPageProps = {
   params: Promise<{ id: string }>;
@@ -20,8 +21,10 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
   useAuthGuard("require-auth");
 
   const supabase = useMemo(() => createClient(), []);
-  const [companyName, setCompanyName] = useState<string | null>(null);
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [company, setCompany] = useState<CompanyRow | null>(null);
+  const [companyLoading, setCompanyLoading] = useState(false);
+  const [companyLogoSignedUrl, setCompanyLogoSignedUrl] = useState<string | null>(null);
+  const [companyStampSignedUrl, setCompanyStampSignedUrl] = useState<string | null>(null);
 
   const [estimate, setEstimate] = useState<Estimate | null>(null);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
@@ -31,32 +34,32 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
   useEffect(() => {
     let cancelled = false;
 
-    const applyProfile = async (userId: string | undefined) => {
+    const applyCompany = async (userId: string | undefined) => {
       if (!userId) {
-        setCompanyName(null);
-        setProfileLoading(false);
+        setCompany(null);
+        setCompanyLoading(false);
         return;
       }
-      setProfileLoading(true);
+      setCompanyLoading(true);
       try {
-        const row = await fetchUserProfileCompany(supabase, userId);
-        if (!cancelled) setCompanyName(row?.company_name ?? null);
+        const row = await fetchCompanyByUserId(supabase, userId);
+        if (!cancelled) setCompany(row);
       } catch {
-        if (!cancelled) setCompanyName(null);
+        if (!cancelled) setCompany(null);
       } finally {
-        if (!cancelled) setProfileLoading(false);
+        if (!cancelled) setCompanyLoading(false);
       }
     };
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (cancelled) return;
-      void applyProfile(session?.user?.id);
+      void applyCompany(session?.user?.id);
     });
 
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
-      void applyProfile(session?.user?.id);
+      void applyCompany(session?.user?.id);
     });
 
     return () => {
@@ -64,6 +67,32 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
       subscription.unsubscribe();
     };
   }, [supabase]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      if (!company?.logo_url?.trim() && !company?.stamp_url?.trim()) {
+        if (!cancelled) {
+          setCompanyLogoSignedUrl(null);
+          setCompanyStampSignedUrl(null);
+        }
+        return;
+      }
+      const [logo, stamp] = await Promise.all([
+        createSignedCompanyAssetUrl(supabase, company.logo_url),
+        createSignedCompanyAssetUrl(supabase, company.stamp_url),
+      ]);
+      if (!cancelled) {
+        setCompanyLogoSignedUrl(logo);
+        setCompanyStampSignedUrl(stamp);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, company?.logo_url, company?.stamp_url]);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,7 +148,7 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
     : "견적서 보기";
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
+    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <h1 className="text-xl font-semibold text-gray-900 md:text-2xl">
           {dataLoading ? "견적서 보기" : titleLine}
@@ -129,7 +158,7 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
         </Button>
       </div>
 
-      <CompanyNameHint companyName={companyName} loading={profileLoading} />
+      <CompanyNameHint company={company} loading={companyLoading} />
 
       {loadError ? (
         <p className="text-sm text-red-600">{loadError}</p>
@@ -139,7 +168,9 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
         <QuotePreviewPanel
           estimate={estimate}
           items={quoteItems}
-          companyName={companyName}
+          company={company}
+          companyLogoSignedUrl={companyLogoSignedUrl}
+          companyStampSignedUrl={companyStampSignedUrl}
           onEstimateUpdated={setEstimate}
         />
       ) : null}

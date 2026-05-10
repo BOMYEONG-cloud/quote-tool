@@ -1,18 +1,17 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import type { CompanyRow } from "@/lib/company";
 
 type CompanyNameHintProps = {
-  companyName: string | null | undefined;
-  /** 프로필 조회 중 (안내는 유지하고 살짝 비활성 느낌만 줄 수 있음) */
+  company: CompanyRow | null;
   loading?: boolean;
 };
 
 /**
- * 회사명 미입력 시 견적 출력·보기 화면 상단 안내.
- * 로딩 중에도 표시해 조회 지연 시 빈 화면이 되지 않게 함.
+ * companies 행이 없을 때 견적 출력·보기 화면 상단 안내.
  */
-export function CompanyNameHint({ companyName, loading }: CompanyNameHintProps) {
-  if (companyName?.trim()) return null;
+export function CompanyNameHint({ company, loading }: CompanyNameHintProps) {
+  if (company !== null) return null;
 
   return (
     <div
@@ -24,10 +23,10 @@ export function CompanyNameHint({ companyName, loading }: CompanyNameHintProps) 
       aria-busy={loading || undefined}
     >
       <p className="mb-3 leading-relaxed">
-        회사명을 입력하면 견적서에 자동 표시됩니다.
+        회사 정보를 등록하면 견적서에 사업자 정보가 표시됩니다.
       </p>
       <Button asChild size="sm" variant="outline" className="border-amber-400 bg-white">
-        <Link href="/settings">회사명 입력하기</Link>
+        <Link href="/settings/company">회사 정보 등록</Link>
       </Button>
     </div>
   );

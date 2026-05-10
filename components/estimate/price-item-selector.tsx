@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { PriceItem } from "@/components/price-item/types";
+import { unitMarginPercent } from "@/lib/quote-margin";
 
 type PriceItemSelectorProps = {
   open: boolean;
@@ -149,6 +150,10 @@ export function PriceItemSelector({
                   <ul className="space-y-2">
                     {grouped[category].map((item) => {
                       const selected = selectedIds.includes(item.id);
+                      const pct = unitMarginPercent(
+                        Number(item.customer_price ?? 0),
+                        item.cost_price == null ? null : Number(item.cost_price)
+                      );
                       return (
                         <li key={item.id}>
                           <label
@@ -166,17 +171,44 @@ export function PriceItemSelector({
                               className="mt-1"
                             />
                             <div className="min-w-0 flex-1 text-sm">
-                              <p className="text-base font-medium text-gray-900">
-                                {item.customer_name}
-                              </p>
-                              <p className="text-gray-500">{item.internal_name}</p>
-                              <p className="text-gray-700">
-                                고객가:{" "}
-                                {Number(item.customer_price || 0).toLocaleString()}원 / {item.unit}
-                              </p>
+                              <div className="space-y-1">
+                                <p className="truncate text-lg font-semibold text-gray-900">
+                                  {item.customer_name}
+                                </p>
+                                <p className="truncate text-base text-muted-foreground">
+                                  내부용: {item.internal_name || "—"}
+                                </p>
+                              </div>
+
+                              <div className="mt-3 grid grid-cols-2 gap-2">
+                                <div className="rounded-md bg-gray-50 px-2.5 py-2">
+                                  <p className="text-xs text-muted-foreground">고객가</p>
+                                  <p className="tabular-nums text-base font-medium text-gray-900">
+                                    {Number(item.customer_price || 0).toLocaleString()}원
+                                  </p>
+                                </div>
+                                <div className="rounded-md bg-gray-50 px-2.5 py-2">
+                                  <p className="text-xs text-muted-foreground">원가</p>
+                                  <p className="tabular-nums text-base text-gray-700">
+                                    {item.cost_price == null
+                                      ? "—"
+                                      : `${Number(item.cost_price).toLocaleString()}원`}
+                                  </p>
+                                </div>
+                                <div className="rounded-md bg-gray-50 px-2.5 py-2">
+                                  <p className="text-xs text-muted-foreground">단위</p>
+                                  <p className="text-base text-gray-700">{item.unit || "—"}</p>
+                                </div>
+                                <div className="rounded-md bg-gray-50 px-2.5 py-2">
+                                  <p className="text-xs text-muted-foreground">마진율</p>
+                                  <p className="tabular-nums text-base text-gray-700">
+                                    {pct == null ? "—" : `${pct}%`}
+                                  </p>
+                                </div>
+                              </div>
                               {(item.usage_count ?? 0) > 0 ? (
-                                <p className="text-gray-500">
-                                  사용횟수 {item.usage_count}
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                  사용 횟수 {item.usage_count}
                                 </p>
                               ) : null}
                             </div>

@@ -1,10 +1,17 @@
+import type { CompanyRow } from "@/lib/company";
 import type { Estimate, QuoteItem } from "@/components/estimate/types";
 import { computeQuoteTotals } from "@/lib/quote-preview/totals";
+import { adjustedCustomerSubtotal, sumQuoteQuantities } from "@/lib/quote-margin";
 
-const money = (n: number) => `${Math.round(n).toLocaleString("ko-KR")}원`;
+/** 표·단가 숫자용 (원 접미사 없음) */
+export function formatKRWAmount(n: number): string {
+  return Math.round(n).toLocaleString("ko-KR");
+}
 
-export function displayCompanyLabel(companyName: string | null | undefined): string {
-  const t = companyName?.trim();
+const money = (n: number) => `${formatKRWAmount(n)}원`;
+
+export function displayCompanyLabel(company: CompanyRow | null | undefined): string {
+  const t = company?.business_name?.trim();
   return t && t.length > 0 ? t : "[회사명 미입력]";
 }
 
@@ -50,25 +57,79 @@ export function formatValidityLine(estimate: Estimate): string {
 export type PreviewFormatInput = {
   estimate: Estimate;
   items: QuoteItem[];
-  companyName: string | null;
+  company: CompanyRow | null;
 };
 
-export function buildItemizedPlainText(input: PreviewFormatInput): string {
-  const { estimate, items, companyName } = input;
+/** 일괄 마진 반영 후 공급가·부가세·총액 */
+export function computeAdjustedQuoteTotals(estimate: Estimate, items: QuoteItem[]) {
   const ordered = [...items].sort((a, b) => a.sort_order - b.sort_order);
-  const totals = computeQuoteTotals(ordered, estimate.vat_included);
-  const co = displayCompanyLabel(companyName);
+  const totalQty = sumQuoteQuantities(ordered);
+  const mf = Number(estimate.margin_flat_amount ?? 0);
+  const adjustedRows = ordered.map((r) => ({
+    subtotal_customer: adjustedCustomerSubtotal(r, mf, totalQty),
+  }));
+  return computeQuoteTotals(adjustedRows, estimate.vat_included);
+}
+
+export type CompanyDisplayLines = {
+  repBiz: string | null;
+  address: string | null;
+  phoneEmail: string | null;
+};
+
+/** 미리보기·PDF·텍스트에서 공통으로 쓰는 회사 3줄 포맷 */
+export function buildCompanyDisplayLines(company: CompanyRow | null): CompanyDisplayLines {
+  if (!company) return { repBiz: null, address: null, phoneEmail: null };
+
+  const rep = company.representative_name?.trim();
+  const bn = company.business_number?.trim();
+  const addr = company.address?.trim();
+  const ph = company.phone?.trim();
+  const em = company.email?.trim();
+
+  const repBiz =
+    rep || bn
+      ? `${rep ? `대표 ${rep}` : ""}${rep && bn ? " / " : ""}${bn ?? ""}`.trim()
+      : null;
+  const address = addr || null;
+  const phoneEmail =
+    ph || em ? `${ph ?? ""}${ph && em ? " / " : ""}${em ?? ""}`.trim() : null;
+
+  return { repBiz, address, phoneEmail };
+}
+
+function companyDetailLines(company: CompanyRow | null): string[] {
+  if (!company) return [];
+  const { repBiz, address, phoneEmail } = buildCompanyDisplayLines(company);
+  const lines: string[] = [];
+  if (repBiz) lines.push(repBiz);
+  if (address) lines.push(address);
+  if (phoneEmail) lines.push(phoneEmail);
+  return lines;
+}
+
+export function buildItemizedPlainText(input: PreviewFormatInput): string {
+  const { estimate, items, company } = input;
+  const ordered = [...items].sort((a, b) => a.sort_order - b.sort_order);
+  const totalQty = sumQuoteQuantities(ordered);
+  const mf = Number(estimate.margin_flat_amount ?? 0);
+  const totals = computeAdjustedQuoteTotals(estimate, items);
+  const co = displayCompanyLabel(company);
   const issued = formatIssuedDate(estimate.issued_date);
   const qn = estimate.quote_number?.trim() ?? "";
 
   const lines: string[] = [];
   if (qn) {
-    lines.push(qn);
+    lines.push(`견적번호: ${qn}`);
+    lines.push(`발행일: ${issued}`);
     lines.push("");
   }
   lines.push(itemizedDocumentTitle(estimate));
   lines.push("");
   lines.push(co);
+  for (const L of companyDetailLines(company)) {
+    lines.push(L);
+  }
   lines.push("─────────────────");
   lines.push("");
   lines.push(`고객명: ${estimate.customer_name?.trim() || "—"}`);
@@ -77,7 +138,6 @@ export function buildItemizedPlainText(input: PreviewFormatInput): string {
   if (siteDetail) lines.push(`세부 현장명: ${siteDetail}`);
   const ctype = estimate.construction_type?.trim();
   if (ctype) lines.push(`시공 종류: ${ctype}`);
-  lines.push(`발행일: ${issued}`);
   lines.push(`유효기간: ${formatValidityLine(estimate)}`);
   lines.push("");
   lines.push("품목 표:");
@@ -88,7 +148,7 @@ export function buildItemizedPlainText(input: PreviewFormatInput): string {
     const unit = row.unit?.trim() || "—";
     const qty = Number(row.quantity ?? 0);
     const unitPrice = Number(row.unit_customer_price ?? 0);
-    const sub = Number(row.subtotal_customer ?? 0);
+    const sub = adjustedCustomerSubtotal(row, mf, totalQty);
     lines.push(
       `| ${name} | ${unit} | ${money(unitPrice)} | ${qty} | ${money(sub)} |`
     );
@@ -100,6 +160,12 @@ export function buildItemizedPlainText(input: PreviewFormatInput): string {
   lines.push("─────────────────");
   lines.push(`총액: ${money(totals.total)}`);
   lines.push("");
+  const pubNotes = estimate.customer_notes?.trim();
+  if (pubNotes) {
+    lines.push("비고");
+    lines.push(pubNotes);
+    lines.push("");
+  }
   lines.push("상기와 같이 견적합니다.");
   lines.push(`${co} 드림`);
   lines.push("─────────────────");
@@ -108,13 +174,16 @@ export function buildItemizedPlainText(input: PreviewFormatInput): string {
 }
 
 export function buildKakaoPlainText(input: PreviewFormatInput): string {
-  const { estimate, items, companyName } = input;
+  const { estimate, items, company } = input;
   const ordered = [...items].sort((a, b) => a.sort_order - b.sort_order);
-  const totals = computeQuoteTotals(ordered, estimate.vat_included);
-  const co = displayCompanyLabel(companyName);
+  const totalQty = sumQuoteQuantities(ordered);
+  const mf = Number(estimate.margin_flat_amount ?? 0);
+  const totals = computeAdjustedQuoteTotals(estimate, items);
+  const co = displayCompanyLabel(company);
   const issued = formatIssuedDate(estimate.issued_date);
   const qn = estimate.quote_number?.trim() || "—";
   const project = estimate.project_name?.trim() || "현장";
+  const companyLines = buildCompanyDisplayLines(company);
 
   const lines: string[] = [];
   lines.push(`[${project} 견적서]`);
@@ -128,7 +197,7 @@ export function buildKakaoPlainText(input: PreviewFormatInput): string {
     const name = row.customer_name?.trim() || "—";
     const qty = Number(row.quantity ?? 0);
     const u = row.unit?.trim() || "";
-    const sub = Number(row.subtotal_customer ?? 0);
+    const sub = adjustedCustomerSubtotal(row, mf, totalQty);
     lines.push(`- ${name} (${qty}${u}): ${money(sub)}`);
   }
 
@@ -147,6 +216,15 @@ export function buildKakaoPlainText(input: PreviewFormatInput): string {
   lines.push(`견적번호: ${qn}`);
   lines.push("");
   lines.push(`${co} 드림`);
+  const pubNotes = estimate.customer_notes?.trim();
+  if (pubNotes) {
+    lines.push("");
+    lines.push(`📝 비고`);
+    lines.push(pubNotes);
+  }
+  if (companyLines.repBiz) lines.push(companyLines.repBiz);
+  if (companyLines.address) lines.push(companyLines.address);
+  if (companyLines.phoneEmail) lines.push(companyLines.phoneEmail);
 
   return lines.join("\n");
 }

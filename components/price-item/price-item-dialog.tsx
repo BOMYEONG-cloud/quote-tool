@@ -25,7 +25,7 @@ type PriceItemDialogProps = {
   customerName: string;
   unit: string;
   costPrice: string;
-  marginRate: string;
+  marginRate: number | null;
   customerPrice: string;
   memo: string;
   onCategoryChange: (value: string) => void;
@@ -33,7 +33,6 @@ type PriceItemDialogProps = {
   onCustomerNameChange: (value: string) => void;
   onUnitChange: (value: string) => void;
   onCostPriceChange: (value: string) => void;
-  onMarginRateChange: (value: string) => void;
   onCustomerPriceChange: (value: string) => void;
   onMemoChange: (value: string) => void;
   onSubmit: () => Promise<void>;
@@ -58,7 +57,6 @@ export function PriceItemDialog({
   onCustomerNameChange,
   onUnitChange,
   onCostPriceChange,
-  onMarginRateChange,
   onCustomerPriceChange,
   onMemoChange,
   onSubmit,
@@ -143,6 +141,15 @@ export function PriceItemDialog({
 
           <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
+              <Label htmlFor="dlg-customerName">고객용 이름</Label>
+              <Input
+                id="dlg-customerName"
+                value={customerName}
+                onChange={(e) => onCustomerNameChange(e.target.value)}
+                placeholder="예: 외벽 보수 시공"
+              />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="dlg-internalName">내부용 이름</Label>
               <Input
                 id="dlg-internalName"
@@ -151,13 +158,27 @@ export function PriceItemDialog({
                 placeholder="예: 난이도 높은 외벽 보수"
               />
             </div>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="dlg-customerName">고객용 이름</Label>
+              <Label htmlFor="dlg-customerPrice">고객가</Label>
               <Input
-                id="dlg-customerName"
-                value={customerName}
-                onChange={(e) => onCustomerNameChange(e.target.value)}
-                placeholder="예: 외벽 보수 시공"
+                id="dlg-customerPrice"
+                type="number"
+                value={customerPrice}
+                onChange={(e) => onCustomerPriceChange(e.target.value)}
+                placeholder="예: 120000"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dlg-costPrice">원가</Label>
+              <Input
+                id="dlg-costPrice"
+                type="number"
+                value={costPrice}
+                onChange={(e) => onCostPriceChange(e.target.value)}
+                placeholder="비워두면 기록 없음"
               />
             </div>
           </div>
@@ -179,37 +200,10 @@ export function PriceItemDialog({
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="dlg-customerPrice">고객가</Label>
-              <Input
-                id="dlg-customerPrice"
-                type="number"
-                value={customerPrice}
-                onChange={(e) => onCustomerPriceChange(e.target.value)}
-                placeholder="예: 120000"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="dlg-costPrice">원가 (선택)</Label>
-              <Input
-                id="dlg-costPrice"
-                type="number"
-                value={costPrice}
-                onChange={(e) => onCostPriceChange(e.target.value)}
-                placeholder="비워두면 기록 없음"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="dlg-marginRate">마진율 % (선택)</Label>
-              <Input
-                id="dlg-marginRate"
-                type="number"
-                value={marginRate}
-                onChange={(e) => onMarginRateChange(e.target.value)}
-                placeholder="비워두면 기록 없음"
-              />
+              <Label>마진율</Label>
+              <div className="flex h-12 items-center rounded-md border border-input bg-gray-50 px-3 text-sm tabular-nums">
+                {marginRate == null ? "—" : `${marginRate}%`}
+              </div>
             </div>
           </div>
 

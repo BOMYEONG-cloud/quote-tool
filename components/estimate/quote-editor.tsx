@@ -6,10 +6,13 @@ import { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { EstimateHistoryList } from "@/components/estimate/estimate-history-dialog";
 import { PriceItemSelector } from "@/components/estimate/price-item-selector";
 import {
   ItemsSection,
+  MarginFlatSection,
   MemoSection,
+  PublicNotesSection,
   QuoteSteps,
   SaveActions,
   SiteInfoSection,
@@ -17,9 +20,13 @@ import {
   TotalsSection,
 } from "@/components/estimate/quote-editor-sections";
 import { EditableQuoteItem } from "@/components/estimate/quote-item-list";
-import { Estimate } from "@/components/estimate/types";
+import { Estimate, EstimateHistory } from "@/components/estimate/types";
 import { PriceItem } from "@/components/price-item/types";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
+import { MANUAL_CATEGORY_CUSTOM } from "@/lib/editable-quote-category";
+import { insertEstimateHistory } from "@/lib/estimate-history";
+import { readLastNewQuoteValidityDays, writeLastNewQuoteValidityDays } from "@/lib/new-quote-prefs";
+import { flatMarginPercentOfBase } from "@/lib/quote-margin";
 import { createClient } from "@/lib/supabase/client";
 
 type QuoteEditorProps =
@@ -37,6 +44,8 @@ export function QuoteEditor(props: QuoteEditorProps) {
   const [messageTone, setMessageTone] = useState<"neutral" | "success" | "error">("neutral");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyItems, setHistoryItems] = useState<EstimateHistory[]>([]);
 
   const [priceItems, setPriceItems] = useState<PriceItem[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -48,10 +57,52 @@ export function QuoteEditor(props: QuoteEditorProps) {
   const [siteName, setSiteName] = useState("");
   const [constructionType, setConstructionType] = useState("");
   const [validityDays, setValidityDays] = useState("30");
+  /** 새 견적: 로컬에서 유효일수 읽기 전에는 저장 스킵 */
+  const [newQuotePrefsReady, setNewQuotePrefsReady] = useState(() => props.mode === "edit");
   const [issuedDate, setIssuedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [internalMemo, setInternalMemo] = useState("");
+  const [customerNotes, setCustomerNotes] = useState("");
+  const [marginFlatAmount, setMarginFlatAmount] = useState("");
   const [vatIncluded, setVatIncluded] = useState(false);
   const [status, setStatus] = useState("임시저장");
+
+  const categoryOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of priceItems) {
+      const c = p.category?.trim();
+      if (c) set.add(c);
+    }
+    const list = [...set].sort((a, b) => a.localeCompare(b, "ko-KR"));
+    list.push(MANUAL_CATEGORY_CUSTOM);
+    return list;
+  }, [priceItems]);
+
+  const recalcQuoteItem = useCallback((item: EditableQuoteItem): EditableQuoteItem => {
+    const quantity = Number.isFinite(item.quantity) && item.quantity >= 0 ? item.quantity : 0;
+    const unitCostPrice =
+      item.unit_cost_price == null || !Number.isFinite(item.unit_cost_price)
+        ? null
+        : item.unit_cost_price;
+    const unitCustomerPrice =
+      Number.isFinite(item.unit_customer_price) && item.unit_customer_price >= 0
+        ? item.unit_customer_price
+        : 0;
+
+    let marginRate: number | null = null;
+    if (unitCostPrice != null && unitCostPrice > 0 && unitCustomerPrice > 0) {
+      marginRate = Number((((unitCustomerPrice - unitCostPrice) / unitCostPrice) * 100).toFixed(2));
+    }
+
+    return {
+      ...item,
+      quantity,
+      unit_cost_price: unitCostPrice,
+      margin_rate: marginRate,
+      unit_customer_price: unitCustomerPrice,
+      subtotal_cost: unitCostPrice == null ? null : Number((quantity * unitCostPrice).toFixed(2)),
+      subtotal_customer: Number((quantity * unitCustomerPrice).toFixed(2)),
+    };
+  }, []);
 
   const setErrorMessage = (next: string) => {
     setMessageTone("error");
@@ -85,24 +136,28 @@ export function QuoteEditor(props: QuoteEditorProps) {
         return false;
       }
       if (item.is_manual) {
+        if (!item.category.trim()) {
+          setErrorMessage("단가 입력 항목의 카테고리를 선택해 주세요.");
+          return false;
+        }
         const resolvedCategory =
-          item.category === "직접입력" ? item.custom_category.trim() : item.category.trim();
+          item.category === MANUAL_CATEGORY_CUSTOM
+            ? item.custom_category.trim()
+            : item.category.trim();
         if (!resolvedCategory) {
-          setErrorMessage("직접 입력 항목의 카테고리를 입력해 주세요.");
+          setErrorMessage("직접 입력 카테고리 이름을 입력해 주세요.");
+          return false;
+        }
+        if (!item.unit.trim()) {
+          setErrorMessage("단가 입력 항목의 단위를 선택하거나 입력해 주세요.");
           return false;
         }
         if (!item.customer_name.trim()) {
-          setErrorMessage("직접 입력 항목의 고객용 이름을 입력해 주세요.");
+          setErrorMessage("단가 입력 항목의 고객용 이름을 입력해 주세요.");
           return false;
         }
-        const hasCustomerPrice = item.unit_customer_price > 0;
-        const hasCostAndMargin =
-          item.unit_cost_price != null &&
-          item.unit_cost_price > 0 &&
-          item.margin_rate != null &&
-          item.margin_rate >= 0;
-        if (!hasCustomerPrice && !hasCostAndMargin) {
-          setErrorMessage("직접 입력 항목은 고객가 또는 (원가+마진율) 중 하나가 필요합니다.");
+        if (item.unit_customer_price <= 0) {
+          setErrorMessage("단가 입력 항목의 고객용 단가를 입력해 주세요.");
           return false;
         }
       }
@@ -130,15 +185,12 @@ export function QuoteEditor(props: QuoteEditorProps) {
       const item = ordered[index];
       let linkedPriceItemId = item.price_item_id;
       const resolvedCategory =
-        item.category === "직접입력" ? item.custom_category.trim() : item.category.trim();
+        item.category === MANUAL_CATEGORY_CUSTOM
+          ? item.custom_category.trim()
+          : item.category.trim();
 
       if (item.is_manual && item.save_to_price_items) {
-        const unitCustomerPrice =
-          item.unit_customer_price > 0
-            ? item.unit_customer_price
-            : item.unit_cost_price != null && item.margin_rate != null
-              ? Number((item.unit_cost_price * (1 + item.margin_rate / 100)).toFixed(2))
-              : 0;
+        const unitCustomerPrice = item.unit_customer_price;
 
         const { data: insertedPriceItem, error: insertPriceItemError } = await supabase
           .from("price_items")
@@ -151,7 +203,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
             cost_price: item.unit_cost_price,
             margin_rate: item.margin_rate,
             customer_price: unitCustomerPrice,
-            memo: "견적 직접입력에서 저장됨",
+            memo: "견적 단가 입력에서 저장됨",
             is_active: true,
           })
           .select("id")
@@ -181,38 +233,6 @@ export function QuoteEditor(props: QuoteEditorProps) {
     }
 
     return payload;
-  };
-
-  const recalcQuoteItem = (item: EditableQuoteItem): EditableQuoteItem => {
-    const quantity = Number.isFinite(item.quantity) && item.quantity >= 0 ? item.quantity : 0;
-    const unitCostPrice =
-      item.unit_cost_price == null || !Number.isFinite(item.unit_cost_price)
-        ? null
-        : item.unit_cost_price;
-    const marginRate =
-      item.margin_rate == null || !Number.isFinite(item.margin_rate) ? null : item.margin_rate;
-
-    let unitCustomerPrice =
-      Number.isFinite(item.unit_customer_price) && item.unit_customer_price >= 0
-        ? item.unit_customer_price
-        : 0;
-
-    if (item.is_manual) {
-      const canDerivePrice = unitCostPrice != null && marginRate != null;
-      if (canDerivePrice && unitCustomerPrice <= 0) {
-        unitCustomerPrice = Number((unitCostPrice * (1 + marginRate / 100)).toFixed(2));
-      }
-    }
-
-    return {
-      ...item,
-      quantity,
-      unit_cost_price: unitCostPrice,
-      margin_rate: marginRate,
-      unit_customer_price: unitCustomerPrice,
-      subtotal_cost: unitCostPrice == null ? null : Number((quantity * unitCostPrice).toFixed(2)),
-      subtotal_customer: Number((quantity * unitCustomerPrice).toFixed(2)),
-    };
   };
 
   const fetchNextQuoteNumber = useCallback(async () => {
@@ -277,6 +297,11 @@ export function QuoteEditor(props: QuoteEditorProps) {
       setValidityDays(String(item.validity_days ?? 30));
       setIssuedDate(item.issued_date ?? new Date().toISOString().slice(0, 10));
       setInternalMemo(item.internal_memo ?? "");
+      setCustomerNotes(item.customer_notes ?? "");
+      {
+        const mf = Number(item.margin_flat_amount ?? 0);
+        setMarginFlatAmount(mf > 0 ? String(Math.round(mf)) : "");
+      }
       setVatIncluded(Boolean(item.vat_included));
       setStatus(item.status);
 
@@ -291,28 +316,30 @@ export function QuoteEditor(props: QuoteEditorProps) {
         return;
       }
 
-      const mapped: EditableQuoteItem[] = (items ?? []).map((row) => ({
-        client_id: row.id,
-        is_manual: row.price_item_id == null,
-        category: "기타",
-        custom_category: "",
-        price_item_id: row.price_item_id,
-        internal_name: row.internal_name,
-        customer_name: row.customer_name,
-        unit: row.unit,
-        quantity: Number(row.quantity ?? 0),
-        unit_cost_price: row.unit_cost_price == null ? null : Number(row.unit_cost_price),
-        margin_rate: null,
-        unit_customer_price: Number(row.unit_customer_price ?? 0),
-        subtotal_cost: row.subtotal_cost == null ? null : Number(row.subtotal_cost),
-        subtotal_customer: Number(row.subtotal_customer ?? 0),
-        sort_order: Number(row.sort_order ?? 0),
-        save_to_price_items: false,
-      }));
+      const mapped: EditableQuoteItem[] = (items ?? []).map((row) =>
+        recalcQuoteItem({
+          client_id: row.id,
+          is_manual: row.price_item_id == null,
+          category: "기타",
+          custom_category: "",
+          price_item_id: row.price_item_id,
+          internal_name: row.internal_name,
+          customer_name: row.customer_name,
+          unit: row.unit,
+          quantity: Number(row.quantity ?? 0),
+          unit_cost_price: row.unit_cost_price == null ? null : Number(row.unit_cost_price),
+          margin_rate: null,
+          unit_customer_price: Number(row.unit_customer_price ?? 0),
+          subtotal_cost: row.subtotal_cost == null ? null : Number(row.subtotal_cost),
+          subtotal_customer: Number(row.subtotal_customer ?? 0),
+          sort_order: Number(row.sort_order ?? 0),
+          save_to_price_items: false,
+        })
+      );
 
       setQuoteItems(mapped);
     },
-    [supabase]
+    [supabase, recalcQuoteItem]
   );
 
   useEffect(() => {
@@ -336,6 +363,55 @@ export function QuoteEditor(props: QuoteEditorProps) {
   }, [editingId, session, loadEstimate]);
 
   useEffect(() => {
+    if (!editingId || !session) return;
+
+    let cancelled = false;
+    const fetchHistory = async () => {
+      setHistoryLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("estimate_histories")
+          .select("*")
+          .eq("quote_id", editingId)
+          .order("created_at", { ascending: false })
+          .limit(100);
+        if (cancelled) return;
+        if (error) {
+          setErrorMessage(`히스토리 조회 실패: ${error.message}`);
+          setHistoryItems([]);
+          return;
+        }
+        setHistoryItems((data ?? []) as EstimateHistory[]);
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    };
+    void fetchHistory();
+    return () => {
+      cancelled = true;
+    };
+  }, [editingId, session, supabase]);
+
+  useEffect(() => {
+    if (editingId) return;
+    const last = readLastNewQuoteValidityDays();
+    if (last !== null) {
+      // 새 견적: 마지막 입력 유효일수 복원 (localStorage)
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- 일회성 초기 동기화
+      setValidityDays(String(last));
+    }
+    queueMicrotask(() => {
+      setNewQuotePrefsReady(true);
+    });
+  }, [editingId]);
+
+  useEffect(() => {
+    if (editingId || !newQuotePrefsReady) return;
+    const n = Number.parseInt(validityDays, 10);
+    writeLastNewQuoteValidityDays(Number.isFinite(n) && n > 0 ? n : 30);
+  }, [validityDays, editingId, newQuotePrefsReady]);
+
+  useEffect(() => {
     if (editingId || !session) return;
     let cancelled = false;
     void fetchNextQuoteNumber().then((next) => {
@@ -348,11 +424,13 @@ export function QuoteEditor(props: QuoteEditorProps) {
     };
   }, [editingId, session, fetchNextQuoteNumber]);
 
+  const marginFlatParsed = Math.max(0, Number.parseFloat(marginFlatAmount) || 0);
+  const baseItemsSupplySum = quoteItems.reduce((acc, item) => acc + (item.subtotal_customer || 0), 0);
+  const marginPctOfBase = flatMarginPercentOfBase(baseItemsSupplySum, marginFlatParsed);
+  const marginPercentHint = marginPctOfBase != null ? String(marginPctOfBase) : null;
+
   const { subtotalCustomer, vatAmount, totalAmount } = useMemo(() => {
-    const itemsSum = quoteItems.reduce(
-      (acc, item) => acc + (item.subtotal_customer || 0),
-      0
-    );
+    const itemsSum = baseItemsSupplySum + marginFlatParsed;
 
     let subtotal: number;
     let vat: number;
@@ -373,7 +451,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       vatAmount: String(vat),
       totalAmount: String(total),
     };
-  }, [quoteItems, vatIncluded]);
+  }, [vatIncluded, baseItemsSupplySum, marginFlatParsed]);
 
   const handleInsert = async () => {
     setLoading(true);
@@ -392,6 +470,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
     }
 
     try {
+      const mf = Math.max(0, Number.parseFloat(marginFlatAmount) || 0);
       const { data: insertedEstimate, error: insertEstimateError } = await supabase
         .from("estimates")
         .insert({
@@ -403,6 +482,8 @@ export function QuoteEditor(props: QuoteEditorProps) {
           validity_days: Number(validityDays || 30),
           issued_date: issuedDate,
           internal_memo: internalMemo.trim() || null,
+          customer_notes: customerNotes.trim() || null,
+          margin_flat_amount: mf,
           subtotal_customer: Number(subtotalCustomer || 0),
           vat_amount: Number(vatAmount || 0),
           vat_included: vatIncluded,
@@ -430,6 +511,20 @@ export function QuoteEditor(props: QuoteEditorProps) {
         setErrorMessage(`저장 실패(항목): ${insertItemsError.message}`);
         return;
       }
+
+      await insertEstimateHistory({
+        supabase,
+        quoteId: insertedEstimate.id,
+        ownerId: userId,
+        action: "생성",
+        note: "견적이 생성되었습니다.",
+        snapshot: {
+          status,
+          total_amount: Number(totalAmount || 0),
+          item_count: quoteItems.length,
+          margin_flat_amount: mf,
+        },
+      });
 
       setSuccessMessage("저장 성공!");
       router.push(`/quotes/${insertedEstimate.id}/preview`);
@@ -461,6 +556,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
     }
 
     try {
+      const mf = Math.max(0, Number.parseFloat(marginFlatAmount) || 0);
       const { error: updateEstimateError } = await supabase
         .from("estimates")
         .update({
@@ -472,6 +568,8 @@ export function QuoteEditor(props: QuoteEditorProps) {
           validity_days: Number(validityDays || 30),
           issued_date: issuedDate,
           internal_memo: internalMemo.trim() || null,
+          customer_notes: customerNotes.trim() || null,
+          margin_flat_amount: mf,
           subtotal_customer: Number(subtotalCustomer || 0),
           vat_amount: Number(vatAmount || 0),
           vat_included: vatIncluded,
@@ -503,6 +601,20 @@ export function QuoteEditor(props: QuoteEditorProps) {
         setErrorMessage(`수정 실패(항목 저장): ${insertItemsError.message}`);
         return;
       }
+
+      await insertEstimateHistory({
+        supabase,
+        quoteId: editingId,
+        ownerId: userId,
+        action: "수정",
+        note: "견적 내용이 수정되었습니다.",
+        snapshot: {
+          status,
+          total_amount: Number(totalAmount || 0),
+          item_count: quoteItems.length,
+          margin_flat_amount: mf,
+        },
+      });
 
       setSuccessMessage("수정 성공!");
       router.push(`/quotes/${editingId}/preview`);
@@ -552,19 +664,23 @@ export function QuoteEditor(props: QuoteEditorProps) {
 
   const handleAddManual = () => {
     if (!session) {
-      setErrorMessage("로그인 후 직접 입력 항목을 추가할 수 있습니다.");
+      setErrorMessage("로그인 후 단가 입력으로 항목을 추가할 수 있습니다.");
       return;
     }
     setQuoteItems((prev) => {
+      const defaultCategory =
+        categoryOptions.find((c) => c !== MANUAL_CATEGORY_CUSTOM) ??
+        categoryOptions[0] ??
+        "기타";
       const newItem: EditableQuoteItem = {
         client_id: `manual-${Date.now()}`,
         price_item_id: null,
         is_manual: true,
-        category: "기타",
+        category: defaultCategory,
         custom_category: "",
         internal_name: "",
         customer_name: "",
-        unit: "식",
+        unit: "",
         quantity: 1,
         unit_cost_price: null,
         margin_rate: null,
@@ -643,6 +759,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
           <div className="px-4 pb-4 pt-6">
             <SiteInfoSection
               sessionExists={Boolean(session)}
+              statusLocked={!editingId}
               quoteNumber={quoteNumber}
               customerName={customerName}
               projectName={projectName}
@@ -669,6 +786,8 @@ export function QuoteEditor(props: QuoteEditorProps) {
               sessionExists={Boolean(session)}
               loading={loading}
               items={quoteItems}
+              categoryOptions={categoryOptions}
+              marginFlatAmount={marginFlatParsed}
               embedded
               onOpenSelector={handleOpenSelector}
               onAddManual={handleAddManual}
@@ -694,7 +813,14 @@ export function QuoteEditor(props: QuoteEditorProps) {
 
           <Separator />
 
-          <div className="bg-indigo-50/60 px-4 py-6">
+          <div className="bg-indigo-50/60 space-y-6 px-4 py-6">
+            <MarginFlatSection
+              sessionExists={Boolean(session)}
+              disabled={loading}
+              marginFlat={marginFlatAmount}
+              marginPercentHint={marginPercentHint}
+              onMarginFlatChange={setMarginFlatAmount}
+            />
             <TotalsSection
               sessionExists={Boolean(session)}
               subtotalCustomer={subtotalCustomer}
@@ -707,12 +833,29 @@ export function QuoteEditor(props: QuoteEditorProps) {
 
           <Separator />
 
-          <div className="px-4 pb-6 pt-5">
+          <div className="space-y-6 px-4 pb-6 pt-5">
+            <PublicNotesSection
+              sessionExists={Boolean(session)}
+              customerNotes={customerNotes}
+              onCustomerNotesChange={setCustomerNotes}
+            />
             <MemoSection
               sessionExists={Boolean(session)}
               internalMemo={internalMemo}
               onInternalMemoChange={setInternalMemo}
             />
+            {editingId ? (
+              <section className="space-y-3" aria-labelledby="quote-edit-history">
+                <h3 id="quote-edit-history" className="text-base font-semibold text-gray-900">
+                  수정 히스토리
+                </h3>
+                <EstimateHistoryList
+                  items={historyItems}
+                  loading={historyLoading}
+                  emptyText="아직 수정 히스토리가 없습니다."
+                />
+              </section>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -749,24 +892,26 @@ export function QuoteEditor(props: QuoteEditorProps) {
         onConfirm={(selected) => {
           setSelectorOpen(false);
           setQuoteItems((prev) => {
-            const additions: EditableQuoteItem[] = selected.map((item, index) => ({
-              client_id: `${item.id}-${Date.now()}-${index}`,
-              is_manual: false,
-              category: item.category ?? "기타",
-              custom_category: "",
-              price_item_id: item.id,
-              internal_name: item.internal_name,
-              customer_name: item.customer_name,
-              unit: item.unit,
-              quantity: 1,
-              unit_cost_price: item.cost_price,
-              margin_rate: item.margin_rate,
-              unit_customer_price: item.customer_price,
-              subtotal_cost: item.cost_price == null ? null : item.cost_price,
-              subtotal_customer: item.customer_price,
-              sort_order: index,
-              save_to_price_items: false,
-            }));
+            const additions: EditableQuoteItem[] = selected.map((item, index) =>
+              recalcQuoteItem({
+                client_id: `${item.id}-${Date.now()}-${index}`,
+                is_manual: false,
+                category: item.category ?? "기타",
+                custom_category: "",
+                price_item_id: item.id,
+                internal_name: item.internal_name,
+                customer_name: item.customer_name,
+                unit: item.unit,
+                quantity: 1,
+                unit_cost_price: item.cost_price,
+                margin_rate: item.margin_rate,
+                unit_customer_price: item.customer_price,
+                subtotal_cost: item.cost_price == null ? null : item.cost_price,
+                subtotal_customer: item.customer_price,
+                sort_order: index,
+                save_to_price_items: false,
+              })
+            );
             const offset = additions.length;
             const shifted = prev
               .slice()

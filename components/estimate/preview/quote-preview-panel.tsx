@@ -1,9 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useRef, useState } from "react";
 import type { Estimate, QuoteItem } from "@/components/estimate/types";
+import type { CompanyRow } from "@/lib/company";
 import { createClient } from "@/lib/supabase/client";
+import { insertEstimateHistory } from "@/lib/estimate-history";
 import {
   buildKakaoPlainText,
   sanitizeFilenamePart,
@@ -24,7 +27,9 @@ import {
 type QuotePreviewPanelProps = {
   estimate: Estimate;
   items: QuoteItem[];
-  companyName: string | null;
+  company: CompanyRow | null;
+  companyLogoSignedUrl?: string | null;
+  companyStampSignedUrl?: string | null;
   onEstimateUpdated?: (next: Estimate) => void;
 };
 
@@ -34,18 +39,22 @@ const sentButtonClass =
 export function QuotePreviewPanel({
   estimate,
   items,
-  companyName,
+  company,
+  companyLogoSignedUrl = null,
+  companyStampSignedUrl = null,
   onEstimateUpdated,
 }: QuotePreviewPanelProps) {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [busy, setBusy] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [kakaoOpen, setKakaoOpen] = useState(false);
+  const [companyRequiredOpen, setCompanyRequiredOpen] = useState(false);
   const captureRef = useRef<HTMLDivElement>(null);
 
   const model = useMemo(
-    () => ({ estimate, items, companyName }),
-    [estimate, items, companyName]
+    () => ({ estimate, items, company }),
+    [estimate, items, company]
   );
 
   const kakaoText = useMemo(() => buildKakaoPlainText(model), [model]);
@@ -61,6 +70,54 @@ export function QuotePreviewPanel({
     return `견적서_${q}_${p}`;
   };
 
+  const blobToDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result ?? ""));
+      reader.onerror = () => reject(new Error("이미지 변환에 실패했습니다."));
+      reader.readAsDataURL(blob);
+    });
+
+  const blobToPngDataUrl = (blob: Blob): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const objectUrl = URL.createObjectURL(blob);
+      const img = new window.Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth || img.width;
+          canvas.height = img.naturalHeight || img.height;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("Canvas 컨텍스트를 만들 수 없습니다.");
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL("image/png"));
+        } catch (e) {
+          reject(e instanceof Error ? e : new Error(String(e)));
+        } finally {
+          URL.revokeObjectURL(objectUrl);
+        }
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        reject(new Error("이미지 디코딩에 실패했습니다."));
+      };
+      img.src = objectUrl;
+    });
+
+  const signedUrlToDataUrl = async (signedUrl: string | null): Promise<string | null> => {
+    if (!signedUrl) return null;
+    const res = await fetch(signedUrl);
+    if (!res.ok) {
+      throw new Error(`이미지 로드 실패 (${res.status})`);
+    }
+    const blob = await res.blob();
+    // react-pdf에서 webp 렌더링이 불안정해 PNG로 정규화한다.
+    if (blob.type === "image/webp") {
+      return blobToPngDataUrl(blob);
+    }
+    return blobToDataUrl(blob);
+  };
+
   const handleCopyKakaoFromModal = async () => {
     try {
       await navigator.clipboard.writeText(kakaoText);
@@ -72,10 +129,24 @@ export function QuotePreviewPanel({
   };
 
   const handlePdf = async () => {
+    if (company === null) {
+      setCompanyRequiredOpen(true);
+      return;
+    }
     setBusy("pdf");
     try {
+      const [logoDataUrl, stampDataUrl] = await Promise.all([
+        signedUrlToDataUrl(companyLogoSignedUrl),
+        signedUrlToDataUrl(companyStampSignedUrl),
+      ]);
       const blob = await pdf(
-        <QuotePdfDocument estimate={estimate} items={items} companyName={companyName} />
+        <QuotePdfDocument
+          estimate={estimate}
+          items={items}
+          company={company}
+          logoDataUrl={logoDataUrl}
+          stampDataUrl={stampDataUrl}
+        />
       ).toBlob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -93,6 +164,10 @@ export function QuotePreviewPanel({
   };
 
   const handleImage = async () => {
+    if (company === null) {
+      setCompanyRequiredOpen(true);
+      return;
+    }
     const el = captureRef.current;
     if (!el) {
       showToast("미리보기 영역을 찾을 수 없습니다.");
@@ -136,6 +211,19 @@ export function QuotePreviewPanel({
         return;
       }
 
+      const { data: authData } = await supabase.auth.getUser();
+      const ownerId = authData.user?.id;
+      if (ownerId) {
+        await insertEstimateHistory({
+          supabase,
+          quoteId: estimate.id,
+          ownerId,
+          action: "상태 변경",
+          note: `상태 변경: ${estimate.status} -> 발송됨`,
+          snapshot: { from: estimate.status, to: "발송됨" },
+        });
+      }
+
       const next: Estimate = { ...estimate, status: "발송됨", updated_at: updatedAt };
       onEstimateUpdated?.(next);
       showToast("발송됨으로 변경되었습니다");
@@ -151,7 +239,7 @@ export function QuotePreviewPanel({
   const actionBusy = busy !== null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex min-w-0 w-full max-w-full flex-col gap-4">
       <div className="flex flex-wrap justify-end gap-2">
         <Button asChild size="sm" variant="outline">
           <Link href={`/quotes/${estimate.id}`}>수정</Link>
@@ -169,8 +257,7 @@ export function QuotePreviewPanel({
         <Button
           type="button"
           size="sm"
-          variant="default"
-          className="bg-indigo-600 hover:bg-indigo-700"
+          variant="outline"
           disabled={actionBusy}
           onClick={() => void handleImage()}
         >
@@ -179,12 +266,17 @@ export function QuotePreviewPanel({
         <Button
           type="button"
           size="sm"
-          variant="default"
-          className="bg-indigo-600 hover:bg-indigo-700"
+          variant="outline"
           disabled={actionBusy}
-          onClick={() => setKakaoOpen(true)}
+          onClick={() => {
+            if (company === null) {
+              setCompanyRequiredOpen(true);
+              return;
+            }
+            setKakaoOpen(true);
+          }}
         >
-          텍스트 복사
+          카톡용 복사
         </Button>
         <Button
           type="button"
@@ -201,12 +293,14 @@ export function QuotePreviewPanel({
       <div
         ref={captureRef}
         id="quote-preview-capture"
-        className="overflow-visible rounded-xl border border-gray-200 bg-white p-6 shadow-sm ring-1 ring-black/5"
+        className="min-w-0 w-full max-w-full overflow-visible rounded-xl border border-gray-200 bg-white p-6 shadow-sm ring-1 ring-black/5"
       >
         <ItemizedPreviewBody
           estimate={estimate}
           items={items}
-          companyName={companyName}
+          company={company}
+          logoSignedUrl={companyLogoSignedUrl}
+          stampSignedUrl={companyStampSignedUrl}
         />
       </div>
 
@@ -230,6 +324,32 @@ export function QuotePreviewPanel({
               onClick={() => void handleCopyKakaoFromModal()}
             >
               복사
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={companyRequiredOpen} onOpenChange={setCompanyRequiredOpen}>
+        <DialogContent className="sm:max-w-md" showCloseButton>
+          <DialogHeader>
+            <DialogTitle>회사 정보 필요</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            회사 정보를 먼저 등록해주세요. 등록하시겠습니까?
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button type="button" variant="outline" onClick={() => setCompanyRequiredOpen(false)}>
+              취소
+            </Button>
+            <Button
+              type="button"
+              className="bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => {
+                setCompanyRequiredOpen(false);
+                router.push("/settings/company");
+              }}
+            >
+              회사 정보 등록
             </Button>
           </DialogFooter>
         </DialogContent>
