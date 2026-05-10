@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -105,7 +106,10 @@ export function EstimateList({
                       <span className="text-xs text-gray-500 tabular-nums">
                         {item.quote_number?.trim() ? item.quote_number : "견적번호 미입력"}
                       </span>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <Button asChild variant="default" size="sm">
+                          <Link href={`/quotes/${item.id}/preview`}>견적서 보기</Link>
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"

@@ -98,6 +98,9 @@ export function Header() {
               <span className="max-w-64 truncate text-sm text-muted-foreground">
                 {session.user.email}
               </span>
+              <Button asChild variant="ghost" size="sm" className="text-gray-700">
+                <Link href="/settings">설정</Link>
+              </Button>
               <Button variant="outline" size="sm" onClick={handleSignOut} disabled={loading}>
                 로그아웃
               </Button>
@@ -183,6 +186,11 @@ export function Header() {
                       <p className="truncate text-sm font-medium text-gray-900">
                         {session.user.email}
                       </p>
+                      <Button asChild variant="outline">
+                        <Link href="/settings" onClick={() => setMenuOpen(false)}>
+                          설정
+                        </Link>
+                      </Button>
                       <Button onClick={handleSignOut} disabled={loading} variant="outline">
                         로그아웃
                       </Button>

@@ -432,7 +432,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       }
 
       setSuccessMessage("저장 성공!");
-      router.push("/quotes");
+      router.push(`/quotes/${insertedEstimate.id}/preview`);
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -505,7 +505,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       }
 
       setSuccessMessage("수정 성공!");
-      router.push("/quotes");
+      router.push(`/quotes/${editingId}/preview`);
     } catch (e) {
       setErrorMessage(
         `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
@@ -627,9 +627,13 @@ export function QuoteEditor(props: QuoteEditorProps) {
     <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between gap-3">
         <h1 className="truncate text-2xl font-semibold text-gray-900">{editorTitle}</h1>
-        <Button variant="outline" onClick={() => router.push("/quotes")} disabled={loading}>
-          목록
-        </Button>
+        {!editingId ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={() => router.push("/quotes")} disabled={loading}>
+              목록
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <QuoteSteps steps={steps} />
