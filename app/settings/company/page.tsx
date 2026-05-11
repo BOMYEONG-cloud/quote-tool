@@ -19,6 +19,7 @@ import {
   upsertCompanyForUser,
 } from "@/lib/company";
 import { createSignedCompanyAssetUrl } from "@/lib/company-assets";
+import { captureEvent } from "@/lib/posthog";
 import { createClient } from "@/lib/supabase/client";
 
 export default function CompanySettingsPage() {
@@ -138,6 +139,7 @@ export default function CompanySettingsPage() {
       });
       const refreshed = await fetchCompanyByUserId(supabase, session.user.id);
       setCompanyRow(refreshed ?? null);
+      captureEvent("company_info_updated");
       router.push("/quotes");
     } catch (err) {
       setMessageTone("error");
@@ -148,9 +150,9 @@ export default function CompanySettingsPage() {
   };
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-6 p-6">
+    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-gray-900">회사 정보</h1>
+        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">회사 정보</h1>
         <Button asChild variant="outline" size="sm">
           <Link href="/quotes">견적 목록</Link>
         </Button>

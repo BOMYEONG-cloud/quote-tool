@@ -7,6 +7,7 @@ import type { Estimate, QuoteItem } from "@/components/estimate/types";
 import type { CompanyRow } from "@/lib/company";
 import { createClient } from "@/lib/supabase/client";
 import { insertEstimateHistory } from "@/lib/estimate-history";
+import { captureEvent } from "@/lib/posthog";
 import {
   buildKakaoPlainText,
   sanitizeFilenamePart,
@@ -122,6 +123,7 @@ export function QuotePreviewPanel({
     try {
       await navigator.clipboard.writeText(kakaoText);
       setKakaoOpen(false);
+      captureEvent("quote_kakao_text_copied", { quote_id: estimate.id });
       showToast("복사되었습니다");
     } catch {
       showToast("복사에 실패했습니다. 브라우저 권한을 확인해 주세요.");
@@ -153,6 +155,7 @@ export function QuotePreviewPanel({
       a.href = url;
       a.download = `${baseFilename()}.pdf`;
       a.click();
+      captureEvent("quote_pdf_downloaded", { quote_id: estimate.id });
       URL.revokeObjectURL(url);
     } catch (e) {
       showToast(
@@ -184,6 +187,7 @@ export function QuotePreviewPanel({
       a.href = url;
       a.download = `${baseFilename()}.png`;
       a.click();
+      captureEvent("quote_image_saved", { quote_id: estimate.id });
       URL.revokeObjectURL(url);
     } catch (e) {
       showToast(
@@ -231,6 +235,40 @@ export function QuotePreviewPanel({
       showToast(
         `상태 변경 실패: ${e instanceof Error ? e.message : "알 수 없는 오류"}`
       );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleUpdateStatus = async (nextStatus: "수락됨" | "보류") => {
+    if (estimate.status === nextStatus) return;
+    setBusy(nextStatus);
+    try {
+      const updatedAt = new Date().toISOString();
+      const { error } = await supabase
+        .from("estimates")
+        .update({ status: nextStatus, updated_at: updatedAt })
+        .eq("id", estimate.id);
+      if (error) {
+        showToast(`상태 변경 실패: ${error.message}`);
+        return;
+      }
+      const { data: authData } = await supabase.auth.getUser();
+      const ownerId = authData.user?.id;
+      if (ownerId) {
+        await insertEstimateHistory({
+          supabase,
+          quoteId: estimate.id,
+          ownerId,
+          action: "상태 변경",
+          note: `상태 변경: ${estimate.status} -> ${nextStatus}`,
+          snapshot: { from: estimate.status, to: nextStatus },
+        });
+      }
+      onEstimateUpdated?.({ ...estimate, status: nextStatus, updated_at: updatedAt });
+      showToast(`${nextStatus} 상태로 변경되었습니다`);
+    } catch (e) {
+      showToast(`상태 변경 실패: ${e instanceof Error ? e.message : "알 수 없는 오류"}`);
     } finally {
       setBusy(null);
     }
@@ -290,10 +328,41 @@ export function QuotePreviewPanel({
         </Button>
       </div>
 
+      {estimate.status === "발송됨" ? (
+        <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3">
+          <p className="text-sm font-medium text-blue-900">
+            발송 이후 상태를 바로 추적하세요.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={actionBusy}
+              onClick={() => void handleUpdateStatus("수락됨")}
+            >
+              수락됨 처리
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={actionBusy}
+              onClick={() => void handleUpdateStatus("보류")}
+            >
+              보류 처리
+            </Button>
+            <Button asChild type="button" size="sm" variant="outline">
+              <Link href="/quotes">목록으로 돌아가기</Link>
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
       <div
         ref={captureRef}
         id="quote-preview-capture"
-        className="min-w-0 w-full max-w-full overflow-visible rounded-xl border border-gray-200 bg-white p-6 shadow-sm ring-1 ring-black/5"
+        className="min-w-0 w-full max-w-full overflow-visible rounded-xl border border-gray-200 bg-white p-4 shadow-sm ring-1 ring-black/5 sm:p-6"
       >
         <ItemizedPreviewBody
           estimate={estimate}

@@ -75,7 +75,7 @@ export function ItemizedPreviewBody({
       </div>
 
       <div className="text-center">
-        <p className="text-2xl font-bold tracking-tight break-keep text-gray-900 sm:text-3xl">
+        <p className="text-xl font-bold tracking-tight break-keep text-gray-900 sm:text-2xl">
           {itemizedDocumentTitle(estimate)}
         </p>
       </div>
@@ -85,7 +85,7 @@ export function ItemizedPreviewBody({
       <div className="flex w-full min-w-0 justify-end">
         <div className="flex max-w-full min-w-0 items-start gap-1.5 sm:gap-2">
           <div className="min-w-0 max-w-full text-right text-xs text-gray-800 sm:text-sm">
-            <p className="text-lg font-bold tracking-tight text-gray-900 sm:text-xl">{co}</p>
+            <p className="text-base font-bold tracking-tight text-gray-900 sm:text-lg">{co}</p>
             <div className="mt-2 space-y-0.5 text-xs text-gray-700 sm:text-sm">
               {companyLines.repBiz ? <p className="break-words">{companyLines.repBiz}</p> : null}
               {companyLines.address ? <p className="break-words">{companyLines.address}</p> : null}
@@ -107,30 +107,30 @@ export function ItemizedPreviewBody({
         </div>
       </div>
 
-      <dl className="w-full space-y-2 text-left text-sm">
+      <dl className="w-full min-w-0 space-y-2 text-left text-sm">
         <div className="flex gap-2">
-          <dt className="w-28 shrink-0 text-gray-600">고객명</dt>
-          <dd className="min-w-0">{estimate.customer_name?.trim() || "—"}</dd>
+          <dt className="w-24 shrink-0 text-gray-600 sm:w-28">고객명</dt>
+          <dd className="min-w-0 break-words">{estimate.customer_name?.trim() || "—"}</dd>
         </div>
         <div className="flex gap-2">
-          <dt className="w-28 shrink-0 text-gray-600">현장명</dt>
-          <dd className="min-w-0">{estimate.project_name?.trim() || "—"}</dd>
+          <dt className="w-24 shrink-0 text-gray-600 sm:w-28">현장명</dt>
+          <dd className="min-w-0 break-words">{estimate.project_name?.trim() || "—"}</dd>
         </div>
         {siteDetail ? (
           <div className="flex gap-2">
-            <dt className="w-28 shrink-0 text-gray-600">세부 현장명</dt>
-            <dd className="min-w-0">{siteDetail}</dd>
+            <dt className="w-24 shrink-0 text-gray-600 sm:w-28">세부 현장명</dt>
+            <dd className="min-w-0 break-words">{siteDetail}</dd>
           </div>
         ) : null}
         {ctype ? (
           <div className="flex gap-2">
-            <dt className="w-28 shrink-0 text-gray-600">시공 종류</dt>
-            <dd className="min-w-0">{ctype}</dd>
+            <dt className="w-24 shrink-0 text-gray-600 sm:w-28">시공 종류</dt>
+            <dd className="min-w-0 break-words">{ctype}</dd>
           </div>
         ) : null}
         <div className="flex gap-2">
-          <dt className="w-28 shrink-0 text-gray-600">유효기간</dt>
-          <dd className="tabular-nums">{formatValidityLine(estimate)}</dd>
+          <dt className="w-24 shrink-0 text-gray-600 sm:w-28">유효기간</dt>
+          <dd className="min-w-0 break-words tabular-nums">{formatValidityLine(estimate)}</dd>
         </div>
       </dl>
 
@@ -176,7 +176,7 @@ export function ItemizedPreviewBody({
             {ordered.map((row) => (
               <tr key={row.id}>
                 <td
-                  className={`${cellBorder} min-w-0 px-1.5 py-2 text-left max-sm:whitespace-nowrap sm:break-words sm:whitespace-normal sm:px-2`}
+                  className={`${cellBorder} min-w-0 break-words px-1.5 py-2 text-left text-[10px] leading-snug sm:px-2 sm:text-sm sm:leading-normal`}
                 >
                   {row.customer_name?.trim() || "—"}
                 </td>

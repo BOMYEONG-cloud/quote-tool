@@ -8,6 +8,7 @@ import { PriceItemDialog } from "@/components/price-item/price-item-dialog";
 import { PriceItemList } from "@/components/price-item/price-item-list";
 import { PriceItem } from "@/components/price-item/types";
 import { unitMarginPercent } from "@/lib/quote-margin";
+import { captureEvent } from "@/lib/posthog";
 import { cn } from "@/lib/utils";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
 import { createClient } from "@/lib/supabase/client";
@@ -209,6 +210,7 @@ export default function PriceItemsPage() {
           setErrorMessage(`저장 실패: ${error.message} (code: ${error.code ?? "없음"})`);
           return;
         }
+        captureEvent("price_item_added", { category: category.trim() });
         setSuccessMessage("단가 항목 저장 성공!");
       }
 
@@ -315,9 +317,9 @@ export default function PriceItemsPage() {
   );
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-gray-900">단가표</h1>
+    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">단가표</h1>
         <Button onClick={handleStartCreate} disabled={!session || loading}>
           <Plus className="h-4 w-4" />
           새 단가
@@ -325,10 +327,7 @@ export default function PriceItemsPage() {
       </div>
 
       {tabs.length > 1 ? (
-        <nav
-          className="-mx-1 flex flex-wrap gap-2 overflow-x-auto px-1"
-          aria-label="단가 카테고리"
-        >
+        <nav className="flex flex-wrap gap-2" aria-label="단가 카테고리">
           {tabs.map((tab) => {
             const active = tab === activeCategory;
             return (

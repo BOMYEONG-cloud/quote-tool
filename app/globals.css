@@ -125,11 +125,11 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-base text-foreground;
-  }
   html {
-    @apply font-sans;
+    @apply font-sans overflow-x-clip;
+  }
+  body {
+    @apply bg-background text-base text-foreground overflow-x-clip antialiased;
   }
   input[type="checkbox"] {
     width: 1.125rem;

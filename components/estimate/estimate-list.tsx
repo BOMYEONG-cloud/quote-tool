@@ -74,8 +74,10 @@ export function EstimateList({
       {!sessionExists ? (
         <p className="text-sm text-muted-foreground">로그인 후 견적 목록을 확인할 수 있습니다.</p>
       ) : estimates.length === 0 ? null : (
-        <ul className="space-y-2">
-          {estimates.map((item) => {
+        <>
+          <p className="mb-2 text-xs text-gray-500">검색 결과 {estimates.length}건</p>
+          <ul className="space-y-2">
+            {estimates.map((item) => {
             const customerLabel = item.customer_name?.trim() ?? "";
             const siteSubLabel = item.site_name?.trim() ?? "";
             const subInfoParts = [customerLabel, siteSubLabel].filter((value) => value.length > 0);
@@ -96,10 +98,10 @@ export function EstimateList({
                     </div>
 
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <p className="min-w-0 flex-1 text-lg font-semibold text-gray-900">
+                      <p className="min-w-0 flex-1 text-base font-semibold leading-snug text-gray-900 sm:text-lg">
                         {item.project_name?.trim() || "현장명 미입력"}
                       </p>
-                      <span className="shrink-0 text-xl font-bold text-indigo-600 tabular-nums">
+                      <span className="shrink-0 text-base font-bold tabular-nums text-indigo-600 sm:text-lg">
                         {Number(item.total_amount || 0).toLocaleString()}원
                       </span>
                     </div>
@@ -150,8 +152,9 @@ export function EstimateList({
                 </Card>
               </li>
             );
-          })}
-        </ul>
+            })}
+          </ul>
+        </>
       )}
     </section>
   );

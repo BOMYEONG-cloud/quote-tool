@@ -26,6 +26,8 @@ const NAV_ITEMS: Array<{ href: string; label: string }> = [
 export function Header() {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
+  const isOnboardingPage = pathname.startsWith("/onboarding");
+  const isMinimalHeader = isLoginPage || isOnboardingPage;
   const supabase = useMemo(() => createClient(), []);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(false);
@@ -67,15 +69,15 @@ export function Header() {
     }
   };
 
-  const showMobileMenu = !isLoginPage;
+  const showMobileMenu = !isMinimalHeader;
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border bg-background/95 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-5">
+    <header className="sticky top-0 z-40 w-full min-w-0 border-b border-border bg-background/95 backdrop-blur">
+      <div className="mx-auto flex w-full min-w-0 max-w-6xl items-center justify-between gap-3 px-4 py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
           <Link
             href="/"
-            className="flex items-center gap-2 text-base font-semibold text-gray-900"
+            className="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-900 sm:text-base"
             aria-label="견적노트 홈"
           >
             <span
@@ -84,9 +86,9 @@ export function Header() {
             >
               <NotebookPen className="h-4 w-4" />
             </span>
-            견적노트
+            <span className="truncate">견적노트</span>
           </Link>
-          {!isLoginPage ? (
+          {!isMinimalHeader ? (
             <nav
               className="hidden items-center gap-4 text-base text-gray-600 md:flex"
               aria-label="주요 메뉴"
@@ -101,7 +103,7 @@ export function Header() {
         </div>
 
         <div className="hidden items-center gap-2 md:flex">
-          {session ? (
+          {!isMinimalHeader && session ? (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -135,7 +137,7 @@ export function Header() {
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
-          ) : !isLoginPage ? (
+          ) : !isMinimalHeader ? (
             <Button asChild size="sm">
               <Link href="/login">로그인</Link>
             </Button>

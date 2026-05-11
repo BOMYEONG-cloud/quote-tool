@@ -63,6 +63,8 @@ export default function QuotesPage() {
   const [messageTone, setMessageTone] = useState<"neutral" | "success" | "error">("neutral");
   const [message, setMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(STATUS_FILTER_ALL);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState<"updated_desc" | "total_desc" | "total_asc">("updated_desc");
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<Estimate | null>(null);
@@ -226,9 +228,41 @@ export default function QuotesPage() {
   }, [estimates]);
 
   const visibleEstimates = useMemo(() => {
-    if (statusFilter === STATUS_FILTER_ALL) return estimates;
-    return estimates.filter((item) => item.status === statusFilter);
-  }, [estimates, statusFilter]);
+    const q = searchTerm.trim().toLocaleLowerCase();
+    const filteredByStatus =
+      statusFilter === STATUS_FILTER_ALL
+        ? estimates
+        : estimates.filter((item) => item.status === statusFilter);
+
+    const filteredByQuery = !q
+      ? filteredByStatus
+      : filteredByStatus.filter((item) => {
+          const haystack = [
+            item.project_name ?? "",
+            item.customer_name ?? "",
+            item.quote_number ?? "",
+          ]
+            .join(" ")
+            .toLocaleLowerCase();
+          return haystack.includes(q);
+        });
+
+    const sorted = filteredByQuery.slice();
+    if (sortBy === "total_desc") {
+      sorted.sort((a, b) => Number(b.total_amount ?? 0) - Number(a.total_amount ?? 0));
+      return sorted;
+    }
+    if (sortBy === "total_asc") {
+      sorted.sort((a, b) => Number(a.total_amount ?? 0) - Number(b.total_amount ?? 0));
+      return sorted;
+    }
+    sorted.sort((a, b) => {
+      const aUpdated = new Date(a.updated_at ?? a.created_at ?? 0).getTime();
+      const bUpdated = new Date(b.updated_at ?? b.created_at ?? 0).getTime();
+      return bUpdated - aUpdated;
+    });
+    return sorted;
+  }, [estimates, searchTerm, sortBy, statusFilter]);
 
   const showEmptyState = Boolean(session) && estimates.length === 0 && messageTone !== "error";
   const showFilteredEmpty =
@@ -239,48 +273,68 @@ export default function QuotesPage() {
     : "";
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-gray-900">견적 목록</h1>
+    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">견적 목록</h1>
         <Button asChild disabled={!session}>
           <Link href="/quotes/new">새 견적</Link>
         </Button>
       </div>
 
       {session && estimates.length > 0 ? (
-        <nav
-          className="-mx-1 flex flex-wrap gap-2 overflow-x-auto px-1"
-          aria-label="견적 상태 필터"
-        >
-          {STATUS_FILTERS.map((filter) => {
-            const active = statusFilter === filter;
-            const count =
-              filter === STATUS_FILTER_ALL ? estimates.length : statusCounts[filter] ?? 0;
-            const cls = filterChipClass[filter];
-            return (
-              <button
-                key={filter}
-                type="button"
-                onClick={() => setStatusFilter(filter)}
-                aria-pressed={active}
-                className={cn(
-                  "shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
-                  active ? cls.active : cls.inactive
-                )}
-              >
-                {filter}
-                <span
+        <>
+          <nav className="flex flex-wrap gap-2" aria-label="견적 상태 필터">
+            {STATUS_FILTERS.map((filter) => {
+              const active = statusFilter === filter;
+              const count =
+                filter === STATUS_FILTER_ALL ? estimates.length : statusCounts[filter] ?? 0;
+              const cls = filterChipClass[filter];
+              return (
+                <button
+                  key={filter}
+                  type="button"
+                  onClick={() => setStatusFilter(filter)}
+                  aria-pressed={active}
                   className={cn(
-                    "ml-2 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs",
-                    active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+                    "shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+                    active ? cls.active : cls.inactive
                   )}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </nav>
+                  {filter}
+                  <span
+                    className={cn(
+                      "ml-2 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs",
+                      active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+                    )}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+            <input
+              type="search"
+              placeholder="현장명, 고객명, 견적번호 검색"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="h-10 rounded-md border border-gray-300 px-3 text-sm outline-none ring-indigo-500 transition focus:ring-2"
+            />
+            <select
+              value={sortBy}
+              onChange={(event) =>
+                setSortBy(event.target.value as "updated_desc" | "total_desc" | "total_asc")
+              }
+              className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none ring-indigo-500 transition focus:ring-2"
+              aria-label="견적 정렬"
+            >
+              <option value="updated_desc">최근 업데이트순</option>
+              <option value="total_desc">금액 높은순</option>
+              <option value="total_asc">금액 낮은순</option>
+            </select>
+          </div>
+        </>
       ) : null}
 
       {message ? (
@@ -298,20 +352,31 @@ export default function QuotesPage() {
       ) : null}
 
       {showEmptyState ? (
-        <p className="text-sm text-muted-foreground">
-          아직 작성한 견적이 없어요.{" "}
-          <Button asChild variant="link" className="h-auto p-0 text-primary">
-            <Link href="/quotes/new">새 견적</Link>
-          </Button>{" "}
-          버튼으로 시작해보세요.
-        </p>
+        <div className="rounded-lg border bg-muted/30 p-4">
+          <p className="text-sm text-muted-foreground">
+            아직 작성한 견적이 없어요. 아래 시작 버튼으로 운영 준비를 한 번에 진행해보세요.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button asChild size="sm">
+              <Link href="/quotes/new">새 견적 작성</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/price-items">단가표 등록</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href="/settings/company">회사 정보 설정</Link>
+            </Button>
+          </div>
+        </div>
       ) : null}
 
       {showFilteredEmpty ? (
         <p className="text-sm text-muted-foreground">
-          {statusFilter === STATUS_FILTER_ALL
-            ? "표시할 견적이 없습니다."
-            : `${statusFilter} 상태의 견적이 없습니다.`}
+          {searchTerm.trim()
+            ? "검색 조건에 맞는 견적이 없습니다. 검색어를 바꾸거나 상태 필터를 초기화해보세요."
+            : statusFilter === STATUS_FILTER_ALL
+              ? "표시할 견적이 없습니다."
+              : `${statusFilter} 상태의 견적이 없습니다.`}
         </p>
       ) : null}
 

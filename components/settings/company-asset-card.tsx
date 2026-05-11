@@ -9,6 +9,7 @@ import {
   uploadCompanyAsset,
 } from "@/lib/company-assets";
 import { updateCompanyAssetUrls, type CompanyRow } from "@/lib/company";
+import { captureEvent } from "@/lib/posthog";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 type CompanyAssetCardProps = {
@@ -62,6 +63,7 @@ export function CompanyAssetCard({
       const next = await updateCompanyAssetUrls(supabase, userId, {
         [patchKey]: path,
       });
+      captureEvent(kind === "logo" ? "company_logo_uploaded" : "company_stamp_uploaded");
       onCompanyUpdated(next);
     } catch (e) {
       setLocalError(e instanceof Error ? e.message : String(e));

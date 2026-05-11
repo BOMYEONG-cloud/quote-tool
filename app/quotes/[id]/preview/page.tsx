@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
 import { fetchCompanyByUserId, type CompanyRow } from "@/lib/company";
 import { createSignedCompanyAssetUrl } from "@/lib/company-assets";
+import { captureEvent } from "@/lib/posthog";
 import { createClient } from "@/lib/supabase/client";
 
 type PreviewPageProps = {
@@ -135,6 +136,7 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
 
       setEstimate(est as Estimate);
       setQuoteItems((rows ?? []) as QuoteItem[]);
+      captureEvent("quote_preview_viewed", { quote_id: estimateId });
       setDataLoading(false);
     })();
 
@@ -148,9 +150,9 @@ export default function QuotePreviewPage({ params }: PreviewPageProps) {
     : "견적서 보기";
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <h1 className="text-xl font-semibold text-gray-900 md:text-2xl">
+    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:p-6">
+      <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+        <h1 className="min-w-0 flex-1 text-xl font-semibold leading-snug text-gray-900 sm:text-2xl">
           {dataLoading ? "견적서 보기" : titleLine}
         </h1>
         <Button asChild variant="outline" size="sm" className="shrink-0">

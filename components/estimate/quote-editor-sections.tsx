@@ -1,6 +1,5 @@
 "use client";
 
-import { Fragment } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,14 +18,22 @@ export type Step = {
 
 type QuoteStepsProps = {
   steps: Step[];
+  onStepSelect?: (step: number) => void;
 };
 
-export function QuoteSteps({ steps }: QuoteStepsProps) {
+export function QuoteSteps({ steps, onStepSelect }: QuoteStepsProps) {
   return (
-    <ol className="flex w-full items-center gap-2" aria-label="견적 작성 진행 단계">
-      {steps.map((step, index) => (
-        <Fragment key={step.number}>
-          <li className="flex items-center gap-2" aria-current={step.state === "current" ? "step" : undefined}>
+    <ol
+      className="grid w-full min-w-0 grid-cols-3 gap-2"
+      aria-label="견적 작성 진행 단계"
+    >
+      {steps.map((step) => (
+        <li key={step.number} className="min-w-0" aria-current={step.state === "current" ? "step" : undefined}>
+          <button
+            type="button"
+            className="flex w-full min-w-0 flex-col items-center gap-1 rounded-md px-0.5 py-1 text-center outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
+            onClick={() => onStepSelect?.(step.number)}
+          >
             <span
               className={cn(
                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
@@ -40,25 +47,16 @@ export function QuoteSteps({ steps }: QuoteStepsProps) {
             </span>
             <span
               className={cn(
-                "whitespace-nowrap",
-                step.state === "completed" && "text-base font-semibold text-gray-900",
-                step.state === "current" && "text-base font-semibold text-indigo-700",
-                step.state === "pending" && "text-sm font-normal text-gray-500"
+                "line-clamp-2 w-full text-xs leading-snug sm:text-sm",
+                step.state === "completed" && "font-semibold text-gray-900",
+                step.state === "current" && "font-semibold text-indigo-700",
+                step.state === "pending" && "font-normal text-gray-500"
               )}
             >
               {step.label}
             </span>
-          </li>
-          {index < steps.length - 1 && (
-            <div
-              className={cn(
-                "h-px flex-1 self-center",
-                step.state === "completed" ? "bg-indigo-600" : "bg-gray-200"
-              )}
-              aria-hidden="true"
-            />
-          )}
-        </Fragment>
+          </button>
+        </li>
       ))}
     </ol>
   );
@@ -131,7 +129,7 @@ export function SiteInfoSection({
               id="projectName"
               value={projectName}
               onChange={(e) => onProjectNameChange(e.target.value)}
-              placeholder="예: 강남 외장 시공"
+              placeholder="예: 가나다로 12"
               disabled={!sessionExists}
             />
           </div>
@@ -248,6 +246,11 @@ export function ItemsSection({
       <h3 id="quote-section-items" className="text-base font-semibold text-gray-900">
         견적 항목
       </h3>
+      <div className="rounded-md border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-900">
+        <p className="font-medium">항목 추가 방법</p>
+        <p className="mt-1">- 단가 입력: 바로 입력하여 사용할 때</p>
+        <p>- 단가표에서 선택: 자주 쓰는 항목을 재사용할 때</p>
+      </div>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -284,23 +287,35 @@ export function ItemsSection({
 type MarginFlatSectionProps = {
   sessionExists: boolean;
   disabled: boolean;
+  enabled: boolean;
   marginFlat: string;
   marginPercentHint: string | null;
+  onEnabledChange: (value: boolean) => void;
   onMarginFlatChange: (value: string) => void;
 };
 
 export function MarginFlatSection({
   sessionExists,
   disabled,
+  enabled,
   marginFlat,
   marginPercentHint,
+  onEnabledChange,
   onMarginFlatChange,
 }: MarginFlatSectionProps) {
   return (
     <section className="space-y-2" aria-labelledby="quote-margin-flat">
-      <h3 id="quote-margin-flat" className="text-base font-semibold text-gray-900">
-        일괄 마진
-      </h3>
+      <div className="flex items-center justify-between rounded-md border bg-white px-3 py-2">
+        <h3 id="quote-margin-flat" className="text-base font-semibold text-gray-900">
+          일괄 마진
+        </h3>
+        <Switch
+          id="marginFlatEnabled"
+          checked={enabled}
+          onCheckedChange={onEnabledChange}
+          disabled={!sessionExists || disabled}
+        />
+      </div>
       <p className="text-sm text-muted-foreground">
         입력한 금액만큼 고객 합계에 더해지며, 각 행은{" "}
         <strong className="font-medium text-gray-800">수량 비례로</strong> 같은 비율로 나뉘어 소계에
@@ -311,18 +326,24 @@ export function MarginFlatSection({
           <label htmlFor="marginFlatAmount" className="text-sm font-medium text-gray-900">
             마진금액(원)
           </label>
-          <Input
-            id="marginFlatAmount"
-            type="number"
-            inputMode="numeric"
-            min="0"
-            step="1"
-            placeholder="예: 100000"
-            value={marginFlat}
-            onChange={(e) => onMarginFlatChange(e.target.value)}
-            disabled={!sessionExists || disabled}
-            className="max-w-xs tabular-nums"
-          />
+          {enabled ? (
+            <Input
+              id="marginFlatAmount"
+              type="number"
+              inputMode="numeric"
+              min="0"
+              step="1"
+              placeholder="예: 100000"
+              value={marginFlat}
+              onChange={(e) => onMarginFlatChange(e.target.value)}
+              disabled={!sessionExists || disabled}
+              className="max-w-xs tabular-nums"
+            />
+          ) : (
+            <div className="h-10 rounded-md border border-dashed bg-gray-50 px-3 py-2 text-sm text-gray-500">
+              토글을 켜면 금액 입력이 활성화됩니다.
+            </div>
+          )}
         </div>
         <p className="pb-2 text-sm tabular-nums text-indigo-700">
           {marginPercentHint ? (
@@ -392,7 +413,9 @@ export function TotalsSection({
         </div>
         <div className="mt-1 flex items-baseline justify-between border-t border-indigo-100 pt-3">
           <span className="text-sm font-medium text-gray-900">총액</span>
-          <span className="text-2xl font-bold text-indigo-700">{formatKRW(totalAmount)}원</span>
+          <span className="text-xl font-bold tabular-nums text-indigo-700 sm:text-2xl">
+            {formatKRW(totalAmount)}원
+          </span>
         </div>
       </div>
     </section>
@@ -402,13 +425,17 @@ export function TotalsSection({
 type PublicNotesSectionProps = {
   sessionExists: boolean;
   customerNotes: string;
+  recentNotes: string[];
   onCustomerNotesChange: (value: string) => void;
+  onApplyRecentNote: (value: string) => void;
 };
 
 export function PublicNotesSection({
   sessionExists,
   customerNotes,
+  recentNotes,
   onCustomerNotesChange,
+  onApplyRecentNote,
 }: PublicNotesSectionProps) {
   return (
     <section className="space-y-4" aria-labelledby="quote-public-notes">
@@ -423,6 +450,25 @@ export function PublicNotesSection({
         placeholder={`예시)\n계좌번호: OO은행 123-456-789012 예금주 ㈜OOO\n선금 30% 후 시공 시작, 잔금 70% 검수 후 7영업일 이내\n유효기간 내 진행 안 시 재견 필요`}
         className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
       />
+      {recentNotes.length > 0 ? (
+        <div className="space-y-2 rounded-md border p-3">
+          <p className="text-xs font-medium text-gray-700">이전 비고 불러오기</p>
+          <div className="flex flex-wrap gap-2">
+            {recentNotes.map((note, index) => (
+              <Button
+                key={`${note.slice(0, 20)}-${index}`}
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => onApplyRecentNote(note)}
+                disabled={!sessionExists}
+              >
+                최근 비고 {index + 1}
+              </Button>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

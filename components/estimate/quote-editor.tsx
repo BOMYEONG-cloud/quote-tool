@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Session } from "@supabase/supabase-js";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { EstimateHistoryList } from "@/components/estimate/estimate-history-dialog";
 import { PriceItemSelector } from "@/components/estimate/price-item-selector";
 import {
@@ -26,12 +25,30 @@ import { useAuthGuard } from "@/lib/auth/use-auth-guard";
 import { MANUAL_CATEGORY_CUSTOM } from "@/lib/editable-quote-category";
 import { insertEstimateHistory } from "@/lib/estimate-history";
 import { readLastNewQuoteValidityDays, writeLastNewQuoteValidityDays } from "@/lib/new-quote-prefs";
+import { captureEvent } from "@/lib/posthog";
 import { flatMarginPercentOfBase } from "@/lib/quote-margin";
 import { createClient } from "@/lib/supabase/client";
 
 type QuoteEditorProps =
   | { mode: "new" }
   | { mode: "edit"; estimateId: string };
+
+type QuoteEditorDraft = {
+  customerName: string;
+  projectName: string;
+  quoteNumber: string;
+  siteName: string;
+  constructionType: string;
+  validityDays: string;
+  issuedDate: string;
+  internalMemo: string;
+  customerNotes: string;
+  marginFlatEnabled: boolean;
+  marginFlatAmount: string;
+  vatIncluded: boolean;
+  status: string;
+  quoteItems: EditableQuoteItem[];
+};
 
 export function QuoteEditor(props: QuoteEditorProps) {
   useAuthGuard("require-auth");
@@ -43,9 +60,12 @@ export function QuoteEditor(props: QuoteEditorProps) {
   const [session, setSession] = useState<Session | null>(null);
   const [messageTone, setMessageTone] = useState<"neutral" | "success" | "error">("neutral");
   const [message, setMessage] = useState("");
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyItems, setHistoryItems] = useState<EstimateHistory[]>([]);
+  const [currentFormStep, setCurrentFormStep] = useState<1 | 2 | 3>(1);
+  const [recentCustomerNotes, setRecentCustomerNotes] = useState<string[]>([]);
 
   const [priceItems, setPriceItems] = useState<PriceItem[]>([]);
   const [selectorOpen, setSelectorOpen] = useState(false);
@@ -57,14 +77,16 @@ export function QuoteEditor(props: QuoteEditorProps) {
   const [siteName, setSiteName] = useState("");
   const [constructionType, setConstructionType] = useState("");
   const [validityDays, setValidityDays] = useState("30");
-  /** 새 견적: 로컬에서 유효일수 읽기 전에는 저장 스킵 */
+  /** 새 견적: 기기 임시보관에서 유효일수 읽기 전에는 저장 스킵 */
   const [newQuotePrefsReady, setNewQuotePrefsReady] = useState(() => props.mode === "edit");
   const [issuedDate, setIssuedDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [internalMemo, setInternalMemo] = useState("");
   const [customerNotes, setCustomerNotes] = useState("");
+  const [marginFlatEnabled, setMarginFlatEnabled] = useState(false);
   const [marginFlatAmount, setMarginFlatAmount] = useState("");
   const [vatIncluded, setVatIncluded] = useState(false);
   const [status, setStatus] = useState("임시저장");
+  const draftKey = editingId ? `quote-editor-draft:${editingId}` : "quote-editor-draft:new";
 
   const categoryOptions = useMemo(() => {
     const set = new Set<string>();
@@ -104,6 +126,28 @@ export function QuoteEditor(props: QuoteEditorProps) {
     };
   }, []);
 
+  const applyDraft = useCallback(
+    (parsed: Partial<QuoteEditorDraft>) => {
+      if (typeof parsed.customerName === "string") setCustomerName(parsed.customerName);
+      if (typeof parsed.projectName === "string") setProjectName(parsed.projectName);
+      if (typeof parsed.quoteNumber === "string") setQuoteNumber(parsed.quoteNumber);
+      if (typeof parsed.siteName === "string") setSiteName(parsed.siteName);
+      if (typeof parsed.constructionType === "string") setConstructionType(parsed.constructionType);
+      if (typeof parsed.validityDays === "string") setValidityDays(parsed.validityDays);
+      if (typeof parsed.issuedDate === "string") setIssuedDate(parsed.issuedDate);
+      if (typeof parsed.internalMemo === "string") setInternalMemo(parsed.internalMemo);
+      if (typeof parsed.customerNotes === "string") setCustomerNotes(parsed.customerNotes);
+      if (typeof parsed.marginFlatEnabled === "boolean") setMarginFlatEnabled(parsed.marginFlatEnabled);
+      if (typeof parsed.marginFlatAmount === "string") setMarginFlatAmount(parsed.marginFlatAmount);
+      if (typeof parsed.vatIncluded === "boolean") setVatIncluded(parsed.vatIncluded);
+      if (typeof parsed.status === "string") setStatus(parsed.status);
+      if (Array.isArray(parsed.quoteItems)) {
+        setQuoteItems(parsed.quoteItems.map((item) => recalcQuoteItem(item as EditableQuoteItem)));
+      }
+    },
+    [recalcQuoteItem]
+  );
+
   const setErrorMessage = (next: string) => {
     setMessageTone("error");
     setMessage(next);
@@ -118,50 +162,118 @@ export function QuoteEditor(props: QuoteEditorProps) {
   };
 
   const validateForm = () => {
+    const errors: string[] = [];
     if (!customerName || !projectName) {
-      setErrorMessage("고객명, 현장명을 모두 입력해 주세요.");
-      return false;
+      errors.push("고객명, 현장명을 모두 입력해 주세요.");
     }
     if (quoteItems.length === 0) {
-      setErrorMessage("견적 항목을 최소 1개 이상 추가해 주세요.");
-      return false;
+      errors.push("견적 항목을 최소 1개 이상 추가해 주세요.");
     }
     if (!totalAmount || Number(totalAmount) <= 0) {
-      setErrorMessage("총액이 0보다 커야 합니다.");
-      return false;
+      errors.push("총액이 0보다 커야 합니다.");
     }
     for (const item of quoteItems) {
       if (item.quantity <= 0) {
-        setErrorMessage("모든 견적 항목의 수량은 0보다 커야 합니다.");
-        return false;
+        errors.push("모든 견적 항목의 수량은 0보다 커야 합니다.");
+        break;
       }
       if (item.is_manual) {
         if (!item.category.trim()) {
-          setErrorMessage("단가 입력 항목의 카테고리를 선택해 주세요.");
-          return false;
+          errors.push("단가 입력 항목의 카테고리를 선택해 주세요.");
+          break;
         }
         const resolvedCategory =
           item.category === MANUAL_CATEGORY_CUSTOM
             ? item.custom_category.trim()
             : item.category.trim();
         if (!resolvedCategory) {
-          setErrorMessage("직접 입력 카테고리 이름을 입력해 주세요.");
-          return false;
+          errors.push("직접 입력 카테고리 이름을 입력해 주세요.");
+          break;
         }
         if (!item.unit.trim()) {
-          setErrorMessage("단가 입력 항목의 단위를 선택하거나 입력해 주세요.");
-          return false;
+          errors.push("단가 입력 항목의 단위를 선택하거나 입력해 주세요.");
+          break;
         }
         if (!item.customer_name.trim()) {
-          setErrorMessage("단가 입력 항목의 고객용 이름을 입력해 주세요.");
-          return false;
+          errors.push("단가 입력 항목의 고객용 이름을 입력해 주세요.");
+          break;
         }
         if (item.unit_customer_price <= 0) {
-          setErrorMessage("단가 입력 항목의 고객용 단가를 입력해 주세요.");
-          return false;
+          errors.push("단가 입력 항목의 고객용 단가를 입력해 주세요.");
+          break;
         }
       }
     }
+    setValidationErrors(errors);
+    if (errors.length > 0) {
+      setErrorMessage(errors[0]);
+      return false;
+    }
+    return true;
+  };
+
+  const validateStepBeforeNext = (step: 1 | 2 | 3) => {
+    if (step === 1) {
+      const errors: string[] = [];
+      if (!customerName.trim() || !projectName.trim()) {
+        errors.push("고객명, 현장명을 모두 입력해 주세요.");
+      }
+      setValidationErrors(errors);
+      if (errors.length > 0) {
+        setErrorMessage(errors[0]);
+        return false;
+      }
+      return true;
+    }
+
+    if (step === 2) {
+      const errors: string[] = [];
+      if (quoteItems.length === 0) {
+        errors.push("견적 항목을 최소 1개 이상 추가해 주세요.");
+      }
+      if (!totalAmount || Number(totalAmount) <= 0) {
+        errors.push("총액이 0보다 커야 합니다.");
+      }
+      for (const item of quoteItems) {
+        if (item.quantity <= 0) {
+          errors.push("모든 견적 항목의 수량은 0보다 커야 합니다.");
+          break;
+        }
+        if (item.is_manual) {
+          if (!item.category.trim()) {
+            errors.push("단가 입력 항목의 카테고리를 선택해 주세요.");
+            break;
+          }
+          const resolvedCategory =
+            item.category === MANUAL_CATEGORY_CUSTOM
+              ? item.custom_category.trim()
+              : item.category.trim();
+          if (!resolvedCategory) {
+            errors.push("직접 입력 카테고리 이름을 입력해 주세요.");
+            break;
+          }
+          if (!item.unit.trim()) {
+            errors.push("단가 입력 항목의 단위를 선택하거나 입력해 주세요.");
+            break;
+          }
+          if (!item.customer_name.trim()) {
+            errors.push("단가 입력 항목의 고객용 이름을 입력해 주세요.");
+            break;
+          }
+          if (item.unit_customer_price <= 0) {
+            errors.push("단가 입력 항목의 고객용 단가를 입력해 주세요.");
+            break;
+          }
+        }
+      }
+      setValidationErrors(errors);
+      if (errors.length > 0) {
+        setErrorMessage(errors[0]);
+        return false;
+      }
+      return true;
+    }
+
     return true;
   };
 
@@ -300,6 +412,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       setCustomerNotes(item.customer_notes ?? "");
       {
         const mf = Number(item.margin_flat_amount ?? 0);
+        setMarginFlatEnabled(mf > 0);
         setMarginFlatAmount(mf > 0 ? String(Math.round(mf)) : "");
       }
       setVatIncluded(Boolean(item.vat_included));
@@ -396,7 +509,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
     if (editingId) return;
     const last = readLastNewQuoteValidityDays();
     if (last !== null) {
-      // 새 견적: 마지막 입력 유효일수 복원 (localStorage)
+      // 새 견적: 마지막 입력 유효일수 복원 (기기 임시보관)
       // eslint-disable-next-line react-hooks/set-state-in-effect -- 일회성 초기 동기화
       setValidityDays(String(last));
     }
@@ -413,6 +526,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
 
   useEffect(() => {
     if (editingId || !session) return;
+    captureEvent("quote_creation_started");
     let cancelled = false;
     void fetchNextQuoteNumber().then((next) => {
       if (cancelled) return;
@@ -424,13 +538,94 @@ export function QuoteEditor(props: QuoteEditorProps) {
     };
   }, [editingId, session, fetchNextQuoteNumber]);
 
+  useEffect(() => {
+    if (!session) return;
+    let cancelled = false;
+    const fetchRecentNotes = async () => {
+      const { data, error } = await supabase
+        .from("estimates")
+        .select("customer_notes")
+        .not("customer_notes", "is", null)
+        .order("updated_at", { ascending: false })
+        .limit(8);
+      if (cancelled || error) return;
+      const unique = Array.from(
+        new Set(
+          (data ?? [])
+            .map((row) => (row.customer_notes ?? "").trim())
+            .filter((v) => v.length > 0)
+        )
+      ).slice(0, 5);
+      setRecentCustomerNotes(unique);
+    };
+    void fetchRecentNotes();
+    return () => {
+      cancelled = true;
+    };
+  }, [session, supabase]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(draftKey);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<QuoteEditorDraft>;
+      queueMicrotask(() => {
+        applyDraft(parsed);
+        setNeutralMessage("이 기기에 임시 보관된 작성 내용을 복구했습니다.");
+      });
+    } catch {
+      // ignore invalid local draft
+    }
+  }, [applyDraft, draftKey]);
+
+  useEffect(() => {
+    const payload: QuoteEditorDraft = {
+      customerName,
+      projectName,
+      quoteNumber,
+      siteName,
+      constructionType,
+      validityDays,
+      issuedDate,
+      internalMemo,
+      customerNotes,
+      marginFlatEnabled,
+      marginFlatAmount,
+      vatIncluded,
+      status,
+      quoteItems,
+    };
+    try {
+      window.localStorage.setItem(draftKey, JSON.stringify(payload));
+    } catch {
+      // ignore localStorage write errors
+    }
+  }, [
+    constructionType,
+    customerName,
+    customerNotes,
+    marginFlatEnabled,
+    draftKey,
+    internalMemo,
+    issuedDate,
+    marginFlatAmount,
+    projectName,
+    quoteItems,
+    quoteNumber,
+    siteName,
+    status,
+    validityDays,
+    vatIncluded,
+  ]);
+
   const marginFlatParsed = Math.max(0, Number.parseFloat(marginFlatAmount) || 0);
+  const activeMarginFlatParsed = marginFlatEnabled ? marginFlatParsed : 0;
   const baseItemsSupplySum = quoteItems.reduce((acc, item) => acc + (item.subtotal_customer || 0), 0);
-  const marginPctOfBase = flatMarginPercentOfBase(baseItemsSupplySum, marginFlatParsed);
+  const marginPctOfBase = flatMarginPercentOfBase(baseItemsSupplySum, activeMarginFlatParsed);
   const marginPercentHint = marginPctOfBase != null ? String(marginPctOfBase) : null;
 
   const { subtotalCustomer, vatAmount, totalAmount } = useMemo(() => {
-    const itemsSum = baseItemsSupplySum + marginFlatParsed;
+    const itemsSum = baseItemsSupplySum + activeMarginFlatParsed;
 
     let subtotal: number;
     let vat: number;
@@ -451,7 +646,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
       vatAmount: String(vat),
       totalAmount: String(total),
     };
-  }, [vatIncluded, baseItemsSupplySum, marginFlatParsed]);
+  }, [vatIncluded, baseItemsSupplySum, activeMarginFlatParsed]);
 
   const handleInsert = async () => {
     setLoading(true);
@@ -470,7 +665,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
     }
 
     try {
-      const mf = Math.max(0, Number.parseFloat(marginFlatAmount) || 0);
+      const mf = marginFlatEnabled ? Math.max(0, Number.parseFloat(marginFlatAmount) || 0) : 0;
       const { data: insertedEstimate, error: insertEstimateError } = await supabase
         .from("estimates")
         .insert({
@@ -526,6 +721,9 @@ export function QuoteEditor(props: QuoteEditorProps) {
         },
       });
 
+      window.localStorage.removeItem(draftKey);
+      setValidationErrors([]);
+      captureEvent("quote_created", { item_count: quoteItems.length });
       setSuccessMessage("저장 성공!");
       router.push(`/quotes/${insertedEstimate.id}/preview`);
     } catch (e) {
@@ -556,7 +754,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
     }
 
     try {
-      const mf = Math.max(0, Number.parseFloat(marginFlatAmount) || 0);
+      const mf = marginFlatEnabled ? Math.max(0, Number.parseFloat(marginFlatAmount) || 0) : 0;
       const { error: updateEstimateError } = await supabase
         .from("estimates")
         .update({
@@ -616,6 +814,9 @@ export function QuoteEditor(props: QuoteEditorProps) {
         },
       });
 
+      window.localStorage.removeItem(draftKey);
+      setValidationErrors([]);
+      captureEvent("quote_updated", { item_count: quoteItems.length });
       setSuccessMessage("수정 성공!");
       router.push(`/quotes/${editingId}/preview`);
     } catch (e) {
@@ -660,6 +861,69 @@ export function QuoteEditor(props: QuoteEditorProps) {
     }
     void fetchPriceItems();
     setSelectorOpen(true);
+  };
+
+  const handleLoadLatestEstimateItems = async () => {
+    if (!session) {
+      setErrorMessage("로그인이 필요합니다.");
+      return;
+    }
+    setLoading(true);
+    setNeutralMessage("직전 견적 항목 불러오는 중...");
+    try {
+      const { data: latestEstimate, error: latestError } = await supabase
+        .from("estimates")
+        .select("id")
+        .order("updated_at", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestError || !latestEstimate?.id) {
+        setErrorMessage("불러올 이전 견적이 없습니다.");
+        return;
+      }
+      const { data: rows, error: rowsError } = await supabase
+        .from("quote_items")
+        .select("*")
+        .eq("quote_id", latestEstimate.id)
+        .order("sort_order", { ascending: true });
+      if (rowsError) {
+        setErrorMessage(`직전 견적 항목 조회 실패: ${rowsError.message}`);
+        return;
+      }
+      const mapped: EditableQuoteItem[] = (rows ?? []).map((row, index) =>
+        recalcQuoteItem({
+          client_id: `latest-${row.id}-${Date.now()}-${index}`,
+          is_manual: row.price_item_id == null,
+          category: "기타",
+          custom_category: "",
+          price_item_id: row.price_item_id,
+          internal_name: row.internal_name,
+          customer_name: row.customer_name,
+          unit: row.unit,
+          quantity: Number(row.quantity ?? 0),
+          unit_cost_price: row.unit_cost_price == null ? null : Number(row.unit_cost_price),
+          margin_rate: null,
+          unit_customer_price: Number(row.unit_customer_price ?? 0),
+          subtotal_cost: row.subtotal_cost == null ? null : Number(row.subtotal_cost),
+          subtotal_customer: Number(row.subtotal_customer ?? 0),
+          sort_order: index,
+          save_to_price_items: false,
+        })
+      );
+      if (mapped.length === 0) {
+        setErrorMessage("직전 견적에 항목이 없습니다.");
+        return;
+      }
+      setQuoteItems(mapped);
+      setSuccessMessage(`직전 견적 항목 ${mapped.length}개를 불러왔습니다.`);
+    } catch (e) {
+      setErrorMessage(
+        `예상치 못한 오류: ${e instanceof Error ? e.message : JSON.stringify(e)}`
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleAddManual = () => {
@@ -717,32 +981,22 @@ export function QuoteEditor(props: QuoteEditorProps) {
     return name || "견적 수정";
   })();
 
-  const siteInfoComplete = customerName.trim() !== "" && projectName.trim() !== "";
-  const itemsComplete =
-    quoteItems.length > 0 && quoteItems.every((item) => item.quantity > 0);
-  const totalsComplete = Number(totalAmount) > 0;
-
-  let currentStep = 1;
-  if (siteInfoComplete) currentStep = 2;
-  if (siteInfoComplete && itemsComplete) currentStep = 3;
-  if (siteInfoComplete && itemsComplete && totalsComplete) currentStep = 0;
-
-  const stateOf = (n: number, complete: boolean): Step["state"] => {
-    if (complete) return "completed";
-    if (n === currentStep) return "current";
+  const stateOf = (n: number): Step["state"] => {
+    if (currentFormStep > n) return "completed";
+    if (currentFormStep === n) return "current";
     return "pending";
   };
 
   const steps: Step[] = [
-    { number: 1, label: "현장 정보", state: stateOf(1, siteInfoComplete) },
-    { number: 2, label: "견적 항목", state: stateOf(2, itemsComplete) },
-    { number: 3, label: "합계 확인", state: stateOf(3, totalsComplete) },
+    { number: 1, label: "현장 정보", state: stateOf(1) },
+    { number: 2, label: "견적 항목", state: stateOf(2) },
+    { number: 3, label: "비고 및 메모", state: stateOf(3) },
   ];
 
   return (
-    <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between gap-3">
-        <h1 className="truncate text-2xl font-semibold text-gray-900">{editorTitle}</h1>
+    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+      <div className="flex min-w-0 items-center justify-between gap-3">
+        <h1 className="min-w-0 truncate text-xl font-semibold text-gray-900 sm:text-2xl">{editorTitle}</h1>
         {!editingId ? (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => router.push("/quotes")} disabled={loading}>
@@ -752,113 +1006,168 @@ export function QuoteEditor(props: QuoteEditorProps) {
         ) : null}
       </div>
 
-      <QuoteSteps steps={steps} />
+      <QuoteSteps
+        steps={steps}
+        onStepSelect={(step) => {
+          if (step >= 1 && step <= 3) setCurrentFormStep(step as 1 | 2 | 3);
+        }}
+      />
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" disabled={loading} onClick={() => void handleLoadLatestEstimateItems()}>
+          직전 견적 항목 불러오기
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={loading}
+          onClick={() => {
+            window.localStorage.removeItem(draftKey);
+            setNeutralMessage("임시 보관된 작성 내용을 삭제했습니다.");
+          }}
+        >
+          임시 작성 내용 삭제
+        </Button>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        작성 내용은 이 기기에서 자동으로 임시 보관됩니다. 저장 완료 시 자동으로 정리됩니다.
+      </p>
 
       <Card>
         <CardContent className="space-y-0 px-0 py-0">
-          <div className="px-4 pb-4 pt-6">
-            <SiteInfoSection
-              sessionExists={Boolean(session)}
-              statusLocked={!editingId}
-              quoteNumber={quoteNumber}
-              customerName={customerName}
-              projectName={projectName}
-              siteName={siteName}
-              constructionType={constructionType}
-              validityDays={validityDays}
-              issuedDate={issuedDate}
-              status={status}
-              onQuoteNumberChange={setQuoteNumber}
-              onCustomerNameChange={setCustomerName}
-              onProjectNameChange={setProjectName}
-              onSiteNameChange={setSiteName}
-              onConstructionTypeChange={setConstructionType}
-              onValidityDaysChange={setValidityDays}
-              onIssuedDateChange={setIssuedDate}
-              onStatusChange={setStatus}
-            />
-          </div>
+          {currentFormStep === 1 ? (
+            <div className="px-4 pb-4 pt-6">
+              <SiteInfoSection
+                sessionExists={Boolean(session)}
+                statusLocked={!editingId}
+                quoteNumber={quoteNumber}
+                customerName={customerName}
+                projectName={projectName}
+                siteName={siteName}
+                constructionType={constructionType}
+                validityDays={validityDays}
+                issuedDate={issuedDate}
+                status={status}
+                onQuoteNumberChange={setQuoteNumber}
+                onCustomerNameChange={setCustomerName}
+                onProjectNameChange={setProjectName}
+                onSiteNameChange={setSiteName}
+                onConstructionTypeChange={setConstructionType}
+                onValidityDaysChange={setValidityDays}
+                onIssuedDateChange={setIssuedDate}
+                onStatusChange={setStatus}
+              />
+            </div>
+          ) : null}
 
-          <Separator />
-
-          <div className="px-4 py-5">
-            <ItemsSection
-              sessionExists={Boolean(session)}
-              loading={loading}
-              items={quoteItems}
-              categoryOptions={categoryOptions}
-              marginFlatAmount={marginFlatParsed}
-              embedded
-              onOpenSelector={handleOpenSelector}
-              onAddManual={handleAddManual}
-              onItemChange={(clientId, patch) => {
-                setQuoteItems((prev) =>
-                  prev.map((item) =>
-                    item.client_id === clientId ? recalcQuoteItem({ ...item, ...patch }) : item
-                  )
-                );
-              }}
-              onRemove={(clientId) => {
-                setQuoteItems((prev) =>
-                  prev
-                    .filter((item) => item.client_id !== clientId)
-                    .slice()
-                    .sort((a, b) => a.sort_order - b.sort_order)
-                    .map((item, index) => ({ ...item, sort_order: index }))
-                );
-              }}
-              onMove={handleMoveItem}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="bg-indigo-50/60 space-y-6 px-4 py-6">
-            <MarginFlatSection
-              sessionExists={Boolean(session)}
-              disabled={loading}
-              marginFlat={marginFlatAmount}
-              marginPercentHint={marginPercentHint}
-              onMarginFlatChange={setMarginFlatAmount}
-            />
-            <TotalsSection
-              sessionExists={Boolean(session)}
-              subtotalCustomer={subtotalCustomer}
-              vatAmount={vatAmount}
-              vatIncluded={vatIncluded}
-              totalAmount={totalAmount}
-              onVatIncludedChange={setVatIncluded}
-            />
-          </div>
-
-          <Separator />
-
-          <div className="space-y-6 px-4 pb-6 pt-5">
-            <PublicNotesSection
-              sessionExists={Boolean(session)}
-              customerNotes={customerNotes}
-              onCustomerNotesChange={setCustomerNotes}
-            />
-            <MemoSection
-              sessionExists={Boolean(session)}
-              internalMemo={internalMemo}
-              onInternalMemoChange={setInternalMemo}
-            />
-            {editingId ? (
-              <section className="space-y-3" aria-labelledby="quote-edit-history">
-                <h3 id="quote-edit-history" className="text-base font-semibold text-gray-900">
-                  수정 히스토리
-                </h3>
-                <EstimateHistoryList
-                  items={historyItems}
-                  loading={historyLoading}
-                  emptyText="아직 수정 히스토리가 없습니다."
+          {currentFormStep === 2 ? (
+            <div className="px-4 py-5">
+              <div className="space-y-6">
+                <ItemsSection
+                  sessionExists={Boolean(session)}
+                  loading={loading}
+                  items={quoteItems}
+                  categoryOptions={categoryOptions}
+                  marginFlatAmount={activeMarginFlatParsed}
+                  embedded
+                  onOpenSelector={handleOpenSelector}
+                  onAddManual={handleAddManual}
+                  onItemChange={(clientId, patch) => {
+                    setQuoteItems((prev) =>
+                      prev.map((item) =>
+                        item.client_id === clientId ? recalcQuoteItem({ ...item, ...patch }) : item
+                      )
+                    );
+                  }}
+                  onRemove={(clientId) => {
+                    setQuoteItems((prev) =>
+                      prev
+                        .filter((item) => item.client_id !== clientId)
+                        .slice()
+                        .sort((a, b) => a.sort_order - b.sort_order)
+                        .map((item, index) => ({ ...item, sort_order: index }))
+                    );
+                  }}
+                  onMove={handleMoveItem}
                 />
-              </section>
-            ) : null}
-          </div>
+                <div className="bg-indigo-50/60 space-y-6 rounded-lg p-4">
+                  <TotalsSection
+                    sessionExists={Boolean(session)}
+                    subtotalCustomer={subtotalCustomer}
+                    vatAmount={vatAmount}
+                    vatIncluded={vatIncluded}
+                    totalAmount={totalAmount}
+                    onVatIncludedChange={setVatIncluded}
+                  />
+                  <MarginFlatSection
+                    sessionExists={Boolean(session)}
+                    disabled={loading}
+                    enabled={marginFlatEnabled}
+                    marginFlat={marginFlatAmount}
+                    marginPercentHint={marginPercentHint}
+                    onEnabledChange={(next) => {
+                      setMarginFlatEnabled(next);
+                      if (!next) setMarginFlatAmount("");
+                    }}
+                    onMarginFlatChange={setMarginFlatAmount}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          {currentFormStep === 3 ? (
+            <div className="space-y-6 px-4 py-6">
+              <PublicNotesSection
+                sessionExists={Boolean(session)}
+                customerNotes={customerNotes}
+                recentNotes={recentCustomerNotes}
+                onCustomerNotesChange={setCustomerNotes}
+                onApplyRecentNote={setCustomerNotes}
+              />
+              <MemoSection
+                sessionExists={Boolean(session)}
+                internalMemo={internalMemo}
+                onInternalMemoChange={setInternalMemo}
+              />
+              {editingId ? (
+                <section className="space-y-3" aria-labelledby="quote-edit-history">
+                  <h3 id="quote-edit-history" className="text-base font-semibold text-gray-900">
+                    수정 히스토리
+                  </h3>
+                  <EstimateHistoryList
+                    items={historyItems}
+                    loading={historyLoading}
+                    emptyText="아직 수정 히스토리가 없습니다."
+                  />
+                </section>
+              ) : null}
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+
+      <div className="flex flex-wrap justify-between gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={currentFormStep === 1}
+          onClick={() => setCurrentFormStep((prev) => (prev === 1 ? prev : ((prev - 1) as 1 | 2 | 3)))}
+        >
+          이전
+        </Button>
+        <Button
+          className="bg-indigo-600 text-white hover:bg-indigo-700"
+          size="sm"
+          disabled={currentFormStep === 3}
+          onClick={() => {
+            if (!validateStepBeforeNext(currentFormStep)) return;
+            setCurrentFormStep((prev) => (prev === 3 ? prev : ((prev + 1) as 1 | 2 | 3)));
+          }}
+        >
+          다음
+        </Button>
+      </div>
 
       {message ? (
         <p
@@ -874,15 +1183,28 @@ export function QuoteEditor(props: QuoteEditorProps) {
         </p>
       ) : null}
 
-      <SaveActions
-        sessionExists={Boolean(session)}
-        loading={loading}
-        editingId={editingId}
-        onInsert={handleInsert}
-        onUpdate={handleUpdate}
-        onDelete={editingId ? handleDeleteEstimate : undefined}
-        onCancel={() => router.push("/quotes")}
-      />
+      {validationErrors.length > 0 ? (
+        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3">
+          <p className="text-sm font-semibold text-red-700">저장 전에 아래 항목을 확인해 주세요.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-red-700">
+            {validationErrors.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      {currentFormStep === 3 ? (
+        <SaveActions
+          sessionExists={Boolean(session)}
+          loading={loading}
+          editingId={editingId}
+          onInsert={handleInsert}
+          onUpdate={handleUpdate}
+          onDelete={editingId ? handleDeleteEstimate : undefined}
+          onCancel={() => router.push("/quotes")}
+        />
+      ) : null}
 
       <PriceItemSelector
         open={selectorOpen}

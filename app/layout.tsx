@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist_Mono } from "next/font/google";
+import { Footer } from "@/components/layout/footer";
 import { Header } from "@/components/layout/header";
+import { PostHogProvider } from "@/components/providers/posthog-provider";
 import "./globals.css";
 
 const geistMono = Geist_Mono({
@@ -19,10 +21,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistMono.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col">
-        <Header />
-        <div className="flex-1">{children}</div>
+    <html lang="ko" className={`${geistMono.variable} h-full antialiased`}>
+      <body className="flex min-h-full flex-col">
+        <PostHogProvider>
+          <Header />
+          <div className="min-w-0 flex-1">{children}</div>
+          <Footer />
+        </PostHogProvider>
       </body>
     </html>
   );
