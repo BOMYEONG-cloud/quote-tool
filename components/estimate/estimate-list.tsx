@@ -37,7 +37,7 @@ function StatusBadge({
 }) {
   const cls = statusBadgeClass[status] ?? "bg-gray-100 text-gray-800 ring-1 ring-gray-200";
   const baseCls =
-    "inline-flex shrink-0 items-center rounded-full px-2.5 py-1 text-xs font-medium";
+    "inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-xs font-medium sm:px-3 sm:py-1 sm:text-sm";
 
   if (!onClick) {
     return <span className={cn(baseCls, cls)}>{status}</span>;
@@ -70,13 +70,15 @@ export function EstimateList({
   onOpenHistory,
 }: EstimateListProps) {
   return (
-    <section className="w-full max-w-2xl">
+    <section className="w-full max-w-3xl">
       {!sessionExists ? (
-        <p className="text-sm text-muted-foreground">로그인 후 견적 목록을 확인할 수 있습니다.</p>
+        <p className="text-sm text-muted-foreground sm:text-base">
+          로그인 후 견적 목록을 확인할 수 있습니다.
+        </p>
       ) : estimates.length === 0 ? null : (
         <>
-          <p className="mb-2 text-xs text-gray-500">검색 결과 {estimates.length}건</p>
-          <ul className="space-y-2">
+          <p className="mb-2 text-xs text-gray-500 sm:text-sm">검색 결과 {estimates.length}건</p>
+          <ul className="space-y-2.5">
             {estimates.map((item) => {
             const customerLabel = item.customer_name?.trim() ?? "";
             const siteSubLabel = item.site_name?.trim() ?? "";
@@ -85,19 +87,19 @@ export function EstimateList({
             return (
               <li key={item.id}>
                 <Card>
-                  <CardContent className="space-y-3">
+                  <CardContent className="space-y-2.5 py-3.5">
                     <div className="flex items-center justify-between gap-2">
                       <StatusBadge
                         status={item.status}
                         disabled={loading}
                         onClick={onStatusClick ? () => onStatusClick(item) : undefined}
                       />
-                      <span className="text-xs text-gray-500 tabular-nums">
+                      <span className="text-xs text-gray-500 tabular-nums sm:text-sm">
                         {item.quote_number?.trim() ? item.quote_number : "견적번호 미입력"}
                       </span>
                     </div>
 
-                    <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="min-w-0 flex-1 text-base font-semibold leading-snug text-gray-900 sm:text-lg">
                         {item.project_name?.trim() || "현장명 미입력"}
                       </p>
@@ -107,26 +109,26 @@ export function EstimateList({
                     </div>
 
                     {subInfoParts.length > 0 ? (
-                      <p className="text-sm text-gray-600">{subInfoParts.join(" · ")}</p>
+                      <p className="text-sm text-gray-600 sm:text-base">{subInfoParts.join(" · ")}</p>
                     ) : null}
 
-                    <Separator />
+                    <Separator className="my-0.5" />
 
-                    <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
                       {onOpenHistory ? (
                         <button
                           type="button"
                           onClick={() => onOpenHistory(item)}
-                          className="text-xs text-gray-500 underline-offset-2 hover:underline tabular-nums"
+                          className="text-xs text-gray-500 underline-offset-2 hover:underline tabular-nums sm:text-sm"
                         >
                           최근 업데이트 {formatHistoryDateTime(item.updated_at)}
                         </button>
                       ) : (
-                        <span className="text-xs text-gray-500 tabular-nums">
+                        <span className="text-xs text-gray-500 tabular-nums sm:text-sm">
                           최근 업데이트 {formatHistoryDateTime(item.updated_at)}
                         </span>
                       )}
-                      <div className="flex flex-wrap justify-end gap-2">
+                      <div className="flex flex-wrap justify-end gap-1.5 sm:gap-2">
                         <Button asChild variant="default" size="sm">
                           <Link href={`/quotes/${item.id}/preview`}>견적서 보기</Link>
                         </Button>

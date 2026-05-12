@@ -111,8 +111,15 @@ export function QuoteEditor(props: QuoteEditorProps) {
         : 0;
 
     let marginRate: number | null = null;
-    if (unitCostPrice != null && unitCostPrice > 0 && unitCustomerPrice > 0) {
-      marginRate = Number((((unitCustomerPrice - unitCostPrice) / unitCostPrice) * 100).toFixed(2));
+    if (
+      unitCostPrice != null &&
+      Number.isFinite(unitCostPrice) &&
+      unitCostPrice >= 0 &&
+      unitCustomerPrice > 0
+    ) {
+      marginRate = Number(
+        (((unitCustomerPrice - unitCostPrice) / unitCustomerPrice) * 100).toFixed(2)
+      );
     }
 
     return {
@@ -304,29 +311,50 @@ export function QuoteEditor(props: QuoteEditorProps) {
       if (item.is_manual && item.save_to_price_items) {
         const unitCustomerPrice = item.unit_customer_price;
 
-        const { data: insertedPriceItem, error: insertPriceItemError } = await supabase
-          .from("price_items")
-          .insert({
-            owner_id: userId,
-            category: resolvedCategory || "기타",
-            internal_name: item.internal_name.trim() || item.customer_name.trim(),
-            customer_name: item.customer_name.trim(),
-            unit: item.unit,
-            cost_price: item.unit_cost_price,
-            margin_rate: item.margin_rate,
-            customer_price: unitCustomerPrice,
-            memo: "견적 단가 입력에서 저장됨",
-            is_active: true,
-          })
-          .select("id")
-          .single();
+        if (item.price_item_id) {
+          const { error: updatePriceItemError } = await supabase
+            .from("price_items")
+            .update({
+              category: resolvedCategory || "기타",
+              internal_name: item.internal_name.trim() || item.customer_name.trim(),
+              customer_name: item.customer_name.trim(),
+              unit: item.unit,
+              cost_price: item.unit_cost_price,
+              margin_rate: item.margin_rate,
+              customer_price: unitCustomerPrice,
+            })
+            .eq("id", item.price_item_id)
+            .eq("owner_id", userId);
 
-        if (insertPriceItemError || !insertedPriceItem) {
-          throw new Error(
-            `단가표 저장 실패: ${insertPriceItemError?.message ?? "price_items insert 실패"}`
-          );
+          if (updatePriceItemError) {
+            throw new Error(`단가표 수정 실패: ${updatePriceItemError.message}`);
+          }
+          linkedPriceItemId = item.price_item_id;
+        } else {
+          const { data: insertedPriceItem, error: insertPriceItemError } = await supabase
+            .from("price_items")
+            .insert({
+              owner_id: userId,
+              category: resolvedCategory || "기타",
+              internal_name: item.internal_name.trim() || item.customer_name.trim(),
+              customer_name: item.customer_name.trim(),
+              unit: item.unit,
+              cost_price: item.unit_cost_price,
+              margin_rate: item.margin_rate,
+              customer_price: unitCustomerPrice,
+              memo: "견적 단가 입력에서 저장됨",
+              is_active: true,
+            })
+            .select("id")
+            .single();
+
+          if (insertPriceItemError || !insertedPriceItem) {
+            throw new Error(
+              `단가표 저장 실패: ${insertPriceItemError?.message ?? "price_items insert 실패"}`
+            );
+          }
+          linkedPriceItemId = insertedPriceItem.id;
         }
-        linkedPriceItemId = insertedPriceItem.id;
       }
 
       payload.push({
@@ -926,11 +954,12 @@ export function QuoteEditor(props: QuoteEditorProps) {
     }
   };
 
-  const handleAddManual = () => {
+  const handleAddManual = (prefillCustomerName?: string) => {
     if (!session) {
       setErrorMessage("로그인 후 단가 입력으로 항목을 추가할 수 있습니다.");
       return;
     }
+    const name = prefillCustomerName?.trim() ?? "";
     setQuoteItems((prev) => {
       const defaultCategory =
         categoryOptions.find((c) => c !== MANUAL_CATEGORY_CUSTOM) ??
@@ -943,7 +972,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
         category: defaultCategory,
         custom_category: "",
         internal_name: "",
-        customer_name: "",
+        customer_name: name,
         unit: "",
         quantity: 1,
         unit_cost_price: null,
@@ -952,15 +981,87 @@ export function QuoteEditor(props: QuoteEditorProps) {
         subtotal_cost: null,
         subtotal_customer: 0,
         sort_order: 0,
-        save_to_price_items: false,
+        save_to_price_items: true,
       };
       const shifted = prev
         .slice()
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((item, index) => ({ ...item, sort_order: index + 1 }));
-      return [newItem, ...shifted];
+      return [recalcQuoteItem(newItem), ...shifted];
     });
   };
+
+  const handleAddPriceItemAsEditableManual = useCallback(
+    (item: PriceItem) => {
+      if (!session) {
+        setErrorMessage("로그인 후 항목을 추가할 수 있습니다.");
+        return;
+      }
+      setQuoteItems((prev) => {
+        const addition = recalcQuoteItem({
+          client_id: `manual-from-${item.id}-${Date.now()}`,
+          is_manual: true,
+          category: item.category ?? "기타",
+          custom_category: "",
+          price_item_id: item.id,
+          internal_name: item.internal_name,
+          customer_name: item.customer_name,
+          unit: item.unit,
+          quantity: 1,
+          unit_cost_price: item.cost_price,
+          margin_rate: item.margin_rate,
+          unit_customer_price: item.customer_price,
+          subtotal_cost: item.cost_price == null ? null : item.cost_price,
+          subtotal_customer: item.customer_price,
+          sort_order: 0,
+          save_to_price_items: true,
+        });
+        const shifted = prev
+          .slice()
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((row, index) => ({ ...row, sort_order: index + 1 }));
+        return [addition, ...shifted];
+      });
+      setNeutralMessage(`「${item.customer_name}」 단가를 아래에서 수정한 뒤 견적에 반영할 수 있어요.`);
+    },
+    [recalcQuoteItem, session]
+  );
+
+  const handleAddFromPriceItem = useCallback(
+    (item: PriceItem) => {
+      if (!session) {
+        setErrorMessage("로그인 후 항목을 추가할 수 있습니다.");
+        return;
+      }
+      setQuoteItems((prev) => {
+        const addition = recalcQuoteItem({
+          client_id: `${item.id}-${Date.now()}`,
+          is_manual: false,
+          category: item.category ?? "기타",
+          custom_category: "",
+          price_item_id: item.id,
+          internal_name: item.internal_name,
+          customer_name: item.customer_name,
+          unit: item.unit,
+          quantity: 1,
+          unit_cost_price: item.cost_price,
+          margin_rate: item.margin_rate,
+          unit_customer_price: item.customer_price,
+          subtotal_cost: item.cost_price == null ? null : item.cost_price,
+          subtotal_customer: item.customer_price,
+          sort_order: 0,
+          save_to_price_items: false,
+        });
+        const shifted = prev
+          .slice()
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((row, index) => ({ ...row, sort_order: index + 1 }));
+        return [addition, ...shifted];
+      });
+      setNeutralMessage(`「${item.customer_name}」 항목을 추가했습니다.`);
+    },
+    [recalcQuoteItem, session]
+  );
 
   const handleMoveItem = (clientId: string, direction: "up" | "down") => {
     setQuoteItems((prev) => {
@@ -994,32 +1095,32 @@ export function QuoteEditor(props: QuoteEditorProps) {
   ];
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 pb-6 sm:gap-5 sm:p-5 sm:pb-8">
       <div className="flex min-w-0 items-center justify-between gap-3">
-        <h1 className="min-w-0 truncate text-xl font-semibold text-gray-900 sm:text-2xl">{editorTitle}</h1>
+        <h1 className="min-w-0 truncate text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl">{editorTitle}</h1>
         {!editingId ? (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => router.push("/quotes")} disabled={loading}>
+            <Button variant="outline" onClick={() => router.push("/quotes")} disabled={loading}>
               목록
             </Button>
           </div>
         ) : null}
       </div>
 
-      <QuoteSteps
-        steps={steps}
-        onStepSelect={(step) => {
-          if (step >= 1 && step <= 3) setCurrentFormStep(step as 1 | 2 | 3);
-        }}
-      />
+      <QuoteSteps steps={steps} />
 
       <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" disabled={loading} onClick={() => void handleLoadLatestEstimateItems()}>
+        <Button
+          variant="outline"
+          className="touch-manipulation"
+          disabled={loading}
+          onClick={() => void handleLoadLatestEstimateItems()}
+        >
           직전 견적 항목 불러오기
         </Button>
         <Button
           variant="outline"
-          size="sm"
+          className="touch-manipulation"
           disabled={loading}
           onClick={() => {
             window.localStorage.removeItem(draftKey);
@@ -1029,14 +1130,14 @@ export function QuoteEditor(props: QuoteEditorProps) {
           임시 작성 내용 삭제
         </Button>
       </div>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
         작성 내용은 이 기기에서 자동으로 임시 보관됩니다. 저장 완료 시 자동으로 정리됩니다.
       </p>
 
       <Card>
         <CardContent className="space-y-0 px-0 py-0">
           {currentFormStep === 1 ? (
-            <div className="px-4 pb-4 pt-6">
+            <div className="px-4 py-2.5 sm:px-5 sm:py-3">
               <SiteInfoSection
                 sessionExists={Boolean(session)}
                 statusLocked={!editingId}
@@ -1061,16 +1162,19 @@ export function QuoteEditor(props: QuoteEditorProps) {
           ) : null}
 
           {currentFormStep === 2 ? (
-            <div className="px-4 py-5">
-              <div className="space-y-6">
+            <div className="px-4 py-2.5 sm:px-5 sm:py-3">
+              <div className="space-y-4">
                 <ItemsSection
                   sessionExists={Boolean(session)}
                   loading={loading}
                   items={quoteItems}
                   categoryOptions={categoryOptions}
                   marginFlatAmount={activeMarginFlatParsed}
+                  priceItems={priceItems}
                   embedded
                   onOpenSelector={handleOpenSelector}
+                  onAddFromPriceItem={handleAddFromPriceItem}
+                  onAddPriceItemAsEditableManual={handleAddPriceItemAsEditableManual}
                   onAddManual={handleAddManual}
                   onItemChange={(clientId, patch) => {
                     setQuoteItems((prev) =>
@@ -1090,7 +1194,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
                   }}
                   onMove={handleMoveItem}
                 />
-                <div className="bg-indigo-50/60 space-y-6 rounded-lg p-4">
+                <div className="bg-indigo-50/60 space-y-4 rounded-lg p-3 sm:p-4">
                   <TotalsSection
                     sessionExists={Boolean(session)}
                     subtotalCustomer={subtotalCustomer}
@@ -1117,7 +1221,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
           ) : null}
 
           {currentFormStep === 3 ? (
-            <div className="space-y-6 px-4 py-6">
+            <div className="space-y-4 px-4 py-2.5 sm:space-y-5 sm:px-5 sm:py-3">
               <PublicNotesSection
                 sessionExists={Boolean(session)}
                 customerNotes={customerNotes}
@@ -1132,7 +1236,7 @@ export function QuoteEditor(props: QuoteEditorProps) {
               />
               {editingId ? (
                 <section className="space-y-3" aria-labelledby="quote-edit-history">
-                  <h3 id="quote-edit-history" className="text-base font-semibold text-gray-900">
+                  <h3 id="quote-edit-history" className="text-base font-semibold text-gray-900 sm:text-lg">
                     수정 히스토리
                   </h3>
                   <EstimateHistoryList
@@ -1147,18 +1251,17 @@ export function QuoteEditor(props: QuoteEditorProps) {
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap justify-between gap-2">
+      <div className="flex flex-wrap items-stretch justify-between gap-3 sm:items-center">
         <Button
           variant="outline"
-          size="sm"
+          className="min-h-11 min-w-[5.5rem] flex-1 touch-manipulation px-4 text-base font-semibold sm:flex-initial sm:min-w-[7rem]"
           disabled={currentFormStep === 1}
           onClick={() => setCurrentFormStep((prev) => (prev === 1 ? prev : ((prev - 1) as 1 | 2 | 3)))}
         >
           이전
         </Button>
         <Button
-          className="bg-indigo-600 text-white hover:bg-indigo-700"
-          size="sm"
+          className="min-h-11 min-w-[5.5rem] flex-1 touch-manipulation bg-indigo-600 px-4 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 sm:flex-initial sm:min-w-[7rem]"
           disabled={currentFormStep === 3}
           onClick={() => {
             if (!validateStepBeforeNext(currentFormStep)) return;
@@ -1173,10 +1276,10 @@ export function QuoteEditor(props: QuoteEditorProps) {
         <p
           className={
             messageTone === "error"
-              ? "text-sm text-red-600"
+              ? "text-sm text-red-600 sm:text-base"
               : messageTone === "success"
-                ? "text-sm text-green-600"
-                : "text-sm text-muted-foreground"
+                ? "text-sm text-green-600 sm:text-base"
+                : "text-sm text-muted-foreground sm:text-base"
           }
         >
           {message}

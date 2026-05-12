@@ -11,7 +11,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const UNIT_OPTIONS = ["m²", "평", "식", "개", "m"] as const;
+const PRESET_UNITS = ["m²", "평", "식", "개", "m"] as const;
+const UNIT_OTHER = "__custom__" as const;
 const CATEGORY_CUSTOM = "__custom__" as const;
 
 type PriceItemDialogProps = {
@@ -88,6 +89,13 @@ export function PriceItemDialog({
       ? trimmedCategory
       : "";
 
+  const presetUnitList = PRESET_UNITS as unknown as string[];
+  const isPresetUnit = presetUnitList.includes(unit);
+  const [unitCustomMode, setUnitCustomMode] = useState(
+    () => unit.trim() !== "" && !isPresetUnit
+  );
+  const unitSelectValue = unitCustomMode ? UNIT_OTHER : isPresetUnit ? unit : "";
+
   const handleCategorySelect = (value: string) => {
     if (value === CATEGORY_CUSTOM) {
       setCustomMode(true);
@@ -107,39 +115,12 @@ export function PriceItemDialog({
         <div className="shrink-0 border-b border-border px-5 py-4">
           <DialogTitle>{isEdit ? "단가 수정" : "새 단가 추가"}</DialogTitle>
           <DialogDescription className="mt-1">
-            카테고리·내부용/고객용 이름·단위·가격·메모를 입력하세요.
+            고객용 이름·고객가·카테고리·원가·마진율·내부용 이름·단위·메모 순으로 입력하세요.
           </DialogDescription>
         </div>
 
-        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-5">
-          <div className="space-y-2">
-            <Label htmlFor="dlg-category">카테고리</Label>
-            <select
-              id="dlg-category"
-              value={selectValue}
-              onChange={(e) => handleCategorySelect(e.target.value)}
-              className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
-            >
-              <option value="" disabled>
-                카테고리를 선택하세요
-              </option>
-              {presetCategories.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-              <option value={CATEGORY_CUSTOM}>+ 직접 입력</option>
-            </select>
-            {customMode ? (
-              <Input
-                value={category}
-                onChange={(e) => onCategoryChange(e.target.value)}
-                placeholder="새 카테고리 입력 (예: 간판)"
-              />
-            ) : null}
-          </div>
-
-          <div className="grid gap-3 md:grid-cols-2">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="dlg-customerName">고객용 이름</Label>
               <Input
@@ -149,18 +130,7 @@ export function PriceItemDialog({
                 placeholder="예: 외벽 보수 시공"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="dlg-internalName">내부용 이름</Label>
-              <Input
-                id="dlg-internalName"
-                value={internalName}
-                onChange={(e) => onInternalNameChange(e.target.value)}
-                placeholder="예: 난이도 높은 외벽 보수"
-              />
-            </div>
-          </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="dlg-customerPrice">고객가</Label>
               <Input
@@ -171,6 +141,34 @@ export function PriceItemDialog({
                 placeholder="예: 120000"
               />
             </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="dlg-category">카테고리</Label>
+              <select
+                id="dlg-category"
+                value={selectValue}
+                onChange={(e) => handleCategorySelect(e.target.value)}
+                className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
+              >
+                <option value="" disabled>
+                  카테고리를 선택하세요
+                </option>
+                {presetCategories.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+                <option value={CATEGORY_CUSTOM}>+ 직접 입력</option>
+              </select>
+              {customMode ? (
+                <Input
+                  value={category}
+                  onChange={(e) => onCategoryChange(e.target.value)}
+                  placeholder="새 카테고리 입력 (예: 간판)"
+                />
+              ) : null}
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="dlg-costPrice">원가</Label>
               <Input
@@ -181,41 +179,73 @@ export function PriceItemDialog({
                 placeholder="비워두면 기록 없음"
               />
             </div>
-          </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="dlg-unit">단위</Label>
-              <select
-                id="dlg-unit"
-                value={unit}
-                onChange={(e) => onUnitChange(e.target.value)}
-                className="h-12 w-full rounded-md border border-input bg-background px-3 text-base"
-              >
-                {UNIT_OPTIONS.map((option) => (
-                  <option key={option} value={option}>
-                    {option}
-                  </option>
-                ))}
-              </select>
-            </div>
             <div className="space-y-2">
               <Label>마진율</Label>
               <div className="flex h-12 items-center rounded-md border border-input bg-gray-50 px-3 text-sm tabular-nums">
                 {marginRate == null ? "—" : `${marginRate}%`}
               </div>
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="dlg-memo">메모 (선택)</Label>
-            <textarea
-              id="dlg-memo"
-              value={memo}
-              onChange={(e) => onMemoChange(e.target.value)}
-              placeholder="세부 조건이나 참고 사항"
-              className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="dlg-internalName">내부용 이름</Label>
+              <Input
+                id="dlg-internalName"
+                value={internalName}
+                onChange={(e) => onInternalNameChange(e.target.value)}
+                placeholder="예: 난이도 높은 외벽 보수"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="dlg-unit">단위</Label>
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <select
+                  id="dlg-unit"
+                  value={unitSelectValue}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === UNIT_OTHER) {
+                      setUnitCustomMode(true);
+                      if (isPresetUnit) onUnitChange("");
+                      return;
+                    }
+                    setUnitCustomMode(false);
+                    onUnitChange(v);
+                  }}
+                  className="h-12 min-w-[6.5rem] flex-1 rounded-md border border-input bg-background px-3 text-base sm:max-w-[10rem]"
+                >
+                  <option value="" disabled>
+                    단위 선택
+                  </option>
+                  {PRESET_UNITS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                  <option value={UNIT_OTHER}>직접 입력</option>
+                </select>
+                {unitCustomMode ? (
+                  <Input
+                    className="min-w-[6rem] flex-1"
+                    placeholder="단위 직접 입력 (예: 대, 롤)"
+                    value={unit}
+                    onChange={(e) => onUnitChange(e.target.value)}
+                  />
+                ) : null}
+              </div>
+            </div>
+
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="dlg-memo">메모 (선택)</Label>
+              <textarea
+                id="dlg-memo"
+                value={memo}
+                onChange={(e) => onMemoChange(e.target.value)}
+                placeholder="세부 조건이나 참고 사항"
+                className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-base"
+              />
+            </div>
           </div>
         </div>
 

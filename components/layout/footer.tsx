@@ -7,12 +7,14 @@ export function Footer() {
   const pathname = usePathname();
   const hideFooter =
     pathname.startsWith("/onboarding") ||
-    /^\/quotes\/[^/]+\/preview$/.test(pathname);
+    /^\/quotes\/[^/]+\/preview$/.test(pathname) ||
+    pathname === "/quotes" ||
+    pathname === "/price-items";
   if (hideFooter) return null;
 
   return (
     <footer className="border-t bg-background">
-      <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 text-xs leading-relaxed text-muted-foreground">
+      <div className="mx-auto flex w-full min-w-0 max-w-6xl flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 text-xs leading-relaxed text-muted-foreground sm:gap-x-4 sm:px-5 sm:text-sm">
         <span className="shrink-0">견적노트 © 2026 열매달보름날</span>
         <span className="min-w-0 break-words">사업자등록번호: 108-25-37861</span>
         <span className="min-w-0 break-all sm:break-words">이메일: qhaud5115@gmail.com</span>

@@ -129,7 +129,7 @@
     @apply font-sans overflow-x-clip;
   }
   body {
-    @apply bg-background text-base text-foreground overflow-x-clip antialiased;
+    @apply bg-background text-base leading-normal text-foreground overflow-x-clip antialiased;
   }
   input[type="checkbox"] {
     width: 1.125rem;

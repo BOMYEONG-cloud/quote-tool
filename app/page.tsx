@@ -32,7 +32,7 @@ export default function Home() {
   if (checkingSession) {
     return (
       <main className="flex min-h-[calc(100vh-4rem)] w-full min-w-0 items-center justify-center px-4">
-        <p className="text-sm text-muted-foreground">불러오는 중...</p>
+        <p className="text-sm text-muted-foreground sm:text-base">불러오는 중...</p>
       </main>
     );
   }
@@ -40,25 +40,25 @@ export default function Home() {
   return (
     <main className="mx-auto w-full min-w-0 max-w-5xl px-4 pb-12 pt-8 sm:px-6 sm:pb-16 sm:pt-10">
       <section className="rounded-2xl border border-indigo-100 bg-gradient-to-b from-indigo-50 to-white px-5 py-8 sm:px-8 sm:py-10">
-        <p className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700">
+        <p className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-700 sm:text-sm">
           시공·인테리어 팀을 위한 모바일 견적 도구
         </p>
-        <h1 className="mt-4 text-2xl font-semibold leading-snug text-gray-900 sm:text-3xl">
+        <h1 className="mt-4 text-2xl font-semibold leading-snug tracking-tight text-gray-900 sm:text-3xl">
           견적은 빠르게 작성하고,
           <br />한 곳에서 모아 관리하고, 바로 발송하세요
         </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-gray-600 sm:text-base">
+        <p className="mt-4 max-w-2xl text-base leading-relaxed text-gray-600 sm:text-lg">
           견적노트는 디지털이 익숙하지 않아도 쉽게 쓰도록 구성했습니다. 복잡한 메뉴 없이
           새 견적 작성, 견적 목록 관리, PDF/카카오 발송까지 하나의 흐름으로 끝낼 수 있습니다.
         </p>
         <div className="mt-6 flex flex-wrap gap-2">
-          <Button asChild size="lg" className="h-12 px-6">
+          <Button asChild size="lg">
             <Link href="/login">1분 안에 시작하기</Link>
           </Button>
-          <Button asChild variant="outline" size="lg" className="h-12 px-6">
+          <Button asChild variant="outline" size="lg">
             <Link href="/quotes/new">바로 견적 작성하기</Link>
           </Button>
-          <Button asChild variant="outline" size="lg" className="h-12 px-6">
+          <Button asChild variant="outline" size="lg">
             <Link href="/quotes">기존 사용자: 견적 목록</Link>
           </Button>
         </div>

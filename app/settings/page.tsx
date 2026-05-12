@@ -9,15 +9,15 @@ export default function SettingsPage() {
   useAuthGuard("require-auth");
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-lg flex-col gap-4 p-4 sm:gap-6 sm:p-6">
+    <main className="mx-auto flex w-full min-w-0 max-w-lg flex-col gap-4 p-4 sm:gap-5 sm:p-6">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">설정</h1>
-        <Button asChild variant="outline" size="sm">
+        <h1 className="text-xl font-semibold tracking-tight text-gray-900 sm:text-2xl">설정</h1>
+        <Button asChild variant="outline">
           <Link href="/quotes">견적 목록</Link>
         </Button>
       </div>
 
-      <Card size="sm">
+      <Card>
         <CardHeader className="border-b border-border">
           <CardTitle>메뉴</CardTitle>
           <CardDescription>앱 설정을 관리합니다.</CardDescription>

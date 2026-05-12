@@ -28,13 +28,13 @@ export function flatMarginPercentOfBase(baseSupplyTotal: number, marginFlat: num
   return Number(((m / b) * 100).toFixed(2));
 }
 
-/** 단가 기준 마진율: (고객가 - 원가) / 원가 × 100 */
+/** 단가 기준 마진율: (고객가 − 원가) ÷ 고객가 × 100 */
 export function unitMarginPercent(
   unitCustomer: number,
   unitCost: number | null | undefined
 ): number | null {
   const c = unitCost == null ? NaN : Number(unitCost);
   const p = Number(unitCustomer);
-  if (!Number.isFinite(c) || c <= 0 || !Number.isFinite(p) || p < 0) return null;
-  return Number((((p - c) / c) * 100).toFixed(2));
+  if (!Number.isFinite(c) || c < 0 || !Number.isFinite(p) || p <= 0) return null;
+  return Number((((p - c) / p) * 100).toFixed(2));
 }

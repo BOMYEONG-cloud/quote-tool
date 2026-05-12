@@ -9,6 +9,14 @@ import { PriceItemList } from "@/components/price-item/price-item-list";
 import { PriceItem } from "@/components/price-item/types";
 import { unitMarginPercent } from "@/lib/quote-margin";
 import { captureEvent } from "@/lib/posthog";
+import { AppLegalBlock } from "@/components/layout/app-legal-block";
+import {
+  listFilterChipClass,
+  listFilterNavClass,
+  listPageH1Class,
+  listPageMainClass,
+  listPageTitleRowClass,
+} from "@/components/list-page/list-page-styles";
 import { cn } from "@/lib/utils";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
 import { createClient } from "@/lib/supabase/client";
@@ -317,17 +325,14 @@ export default function PriceItemsPage() {
   );
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">단가표</h1>
-        <Button onClick={handleStartCreate} disabled={!session || loading}>
-          <Plus className="h-4 w-4" />
-          새 단가
-        </Button>
-      </div>
+    <>
+      <main className={listPageMainClass}>
+        <div className={listPageTitleRowClass}>
+          <h1 className={listPageH1Class}>단가표</h1>
+        </div>
 
       {tabs.length > 1 ? (
-        <nav className="flex flex-wrap gap-2" aria-label="단가 카테고리">
+        <nav className={listFilterNavClass} aria-label="단가 카테고리">
           {tabs.map((tab) => {
             const active = tab === activeCategory;
             return (
@@ -337,7 +342,7 @@ export default function PriceItemsPage() {
                 onClick={() => setActiveCategory(tab)}
                 aria-pressed={active}
                 className={cn(
-                  "shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
+                  listFilterChipClass,
                   active
                     ? "border-indigo-600 bg-indigo-600 text-white"
                     : "border-gray-300 bg-background text-gray-700 hover:bg-gray-50"
@@ -354,10 +359,10 @@ export default function PriceItemsPage() {
         <p
           className={
             messageTone === "error"
-              ? "text-sm text-red-600"
+              ? "text-sm text-red-600 sm:text-base"
               : messageTone === "success"
-                ? "text-sm text-green-600"
-                : "text-sm text-muted-foreground"
+                ? "text-sm text-green-600 sm:text-base"
+                : "text-sm text-muted-foreground sm:text-base"
           }
         >
           {message}
@@ -365,14 +370,14 @@ export default function PriceItemsPage() {
       ) : null}
 
       {session && items.length === 0 && messageTone !== "error" && !message ? (
-        <p className="text-sm text-muted-foreground">
-          아직 등록한 단가가 없어요. 우측 상단{" "}
+        <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
+          아직 등록한 단가가 없어요. 화면 하단{" "}
           <span className="font-medium text-gray-900">새 단가</span> 버튼으로 추가해보세요.
         </p>
       ) : null}
 
       {session && items.length > 0 && visibleItems.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground sm:text-base">
           이 카테고리에 등록된 단가가 없습니다.
         </p>
       ) : null}
@@ -414,6 +419,26 @@ export default function PriceItemsPage() {
         onMemoChange={setMemo}
         onSubmit={handleSubmit}
       />
-    </main>
+      </main>
+
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-[0_-6px_24px_rgba(0,0,0,0.06)] backdrop-blur-md supports-[backdrop-filter]:bg-background/90"
+        role="region"
+        aria-label="새 단가 추가"
+      >
+        <div className="mx-auto w-full max-w-3xl space-y-2 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2.5 sm:px-6">
+          <Button
+            className="w-full touch-manipulation shadow-sm"
+            size="lg"
+            disabled={!session || loading}
+            onClick={handleStartCreate}
+          >
+            <Plus className="h-5 w-5" />
+            새 단가
+          </Button>
+          <AppLegalBlock variant="compact" className="pb-0.5 pt-1" />
+        </div>
+      </div>
+    </>
   );
 }

@@ -17,6 +17,15 @@ import {
 import { Estimate } from "@/components/estimate/types";
 import type { EstimateHistory } from "@/components/estimate/types";
 import { insertEstimateHistory } from "@/lib/estimate-history";
+import { AppLegalBlock } from "@/components/layout/app-legal-block";
+import {
+  listFilterChipClass,
+  listFilterNavClass,
+  listPageH1Class,
+  listPageMainClass,
+  listPageTitleAsideShell,
+  listPageTitleRowClass,
+} from "@/components/list-page/list-page-styles";
 import { cn } from "@/lib/utils";
 import { useAuthGuard } from "@/lib/auth/use-auth-guard";
 import { createClient } from "@/lib/supabase/client";
@@ -64,7 +73,6 @@ export default function QuotesPage() {
   const [message, setMessage] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>(STATUS_FILTER_ALL);
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState<"updated_desc" | "total_desc" | "total_asc">("updated_desc");
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [statusTarget, setStatusTarget] = useState<Estimate | null>(null);
@@ -248,21 +256,13 @@ export default function QuotesPage() {
         });
 
     const sorted = filteredByQuery.slice();
-    if (sortBy === "total_desc") {
-      sorted.sort((a, b) => Number(b.total_amount ?? 0) - Number(a.total_amount ?? 0));
-      return sorted;
-    }
-    if (sortBy === "total_asc") {
-      sorted.sort((a, b) => Number(a.total_amount ?? 0) - Number(b.total_amount ?? 0));
-      return sorted;
-    }
     sorted.sort((a, b) => {
       const aUpdated = new Date(a.updated_at ?? a.created_at ?? 0).getTime();
       const bUpdated = new Date(b.updated_at ?? b.created_at ?? 0).getTime();
       return bUpdated - aUpdated;
     });
     return sorted;
-  }, [estimates, searchTerm, sortBy, statusFilter]);
+  }, [estimates, searchTerm, statusFilter]);
 
   const showEmptyState = Boolean(session) && estimates.length === 0 && messageTone !== "error";
   const showFilteredEmpty =
@@ -273,78 +273,63 @@ export default function QuotesPage() {
     : "";
 
   return (
-    <main className="mx-auto flex w-full min-w-0 max-w-3xl flex-col gap-4 p-4 sm:gap-6 sm:p-6">
-      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">견적 목록</h1>
-        <Button asChild disabled={!session}>
-          <Link href="/quotes/new">새 견적</Link>
-        </Button>
-      </div>
-
-      {session && estimates.length > 0 ? (
-        <>
-          <nav className="flex flex-wrap gap-2" aria-label="견적 상태 필터">
-            {STATUS_FILTERS.map((filter) => {
-              const active = statusFilter === filter;
-              const count =
-                filter === STATUS_FILTER_ALL ? estimates.length : statusCounts[filter] ?? 0;
-              const cls = filterChipClass[filter];
-              return (
-                <button
-                  key={filter}
-                  type="button"
-                  onClick={() => setStatusFilter(filter)}
-                  aria-pressed={active}
-                  className={cn(
-                    "shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors",
-                    active ? cls.active : cls.inactive
-                  )}
-                >
-                  {filter}
-                  <span
-                    className={cn(
-                      "ml-2 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 py-0.5 text-xs",
-                      active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
-                    )}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
-          </nav>
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+    <>
+      <main className={listPageMainClass}>
+        <div className={listPageTitleRowClass}>
+          <h1 className={listPageH1Class}>견적 목록</h1>
+          {session && estimates.length > 0 ? (
             <input
               type="search"
-              placeholder="현장명, 고객명, 견적번호 검색"
+              placeholder="검색"
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              className="h-10 rounded-md border border-gray-300 px-3 text-sm outline-none ring-indigo-500 transition focus:ring-2"
+              className={cn(
+                listPageTitleAsideShell,
+                "min-w-0 w-full text-sm text-foreground outline-none ring-indigo-500 transition placeholder:text-muted-foreground focus-visible:ring-2 sm:text-base"
+              )}
+              aria-label="견적 검색"
             />
-            <select
-              value={sortBy}
-              onChange={(event) =>
-                setSortBy(event.target.value as "updated_desc" | "total_desc" | "total_asc")
-              }
-              className="h-10 rounded-md border border-gray-300 bg-white px-3 text-sm outline-none ring-indigo-500 transition focus:ring-2"
-              aria-label="견적 정렬"
-            >
-              <option value="updated_desc">최근 업데이트순</option>
-              <option value="total_desc">금액 높은순</option>
-              <option value="total_asc">금액 낮은순</option>
-            </select>
-          </div>
-        </>
+          ) : null}
+        </div>
+
+      {session && estimates.length > 0 ? (
+        <nav className={listFilterNavClass} aria-label="견적 상태 필터">
+          {STATUS_FILTERS.map((filter) => {
+            const active = statusFilter === filter;
+            const count =
+              filter === STATUS_FILTER_ALL ? estimates.length : statusCounts[filter] ?? 0;
+            const cls = filterChipClass[filter];
+            return (
+              <button
+                key={filter}
+                type="button"
+                onClick={() => setStatusFilter(filter)}
+                aria-pressed={active}
+                className={cn(listFilterChipClass, active ? cls.active : cls.inactive)}
+              >
+                {filter}
+                <span
+                  className={cn(
+                    "ml-1.5 inline-flex min-w-[1.125rem] items-center justify-center rounded-full px-1 py-px text-[0.65rem] tabular-nums sm:text-xs",
+                    active ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
       ) : null}
 
       {message ? (
         <p
           className={
             messageTone === "error"
-              ? "text-sm text-red-600"
+              ? "text-sm text-red-600 sm:text-base"
               : messageTone === "success"
-                ? "text-sm text-green-600"
-                : "text-sm text-muted-foreground"
+                ? "text-sm text-green-600 sm:text-base"
+                : "text-sm text-muted-foreground sm:text-base"
           }
         >
           {message}
@@ -352,18 +337,18 @@ export default function QuotesPage() {
       ) : null}
 
       {showEmptyState ? (
-        <div className="rounded-lg border bg-muted/30 p-4">
-          <p className="text-sm text-muted-foreground">
+        <div className="rounded-lg border bg-muted/30 p-4 sm:p-5">
+          <p className="text-sm leading-relaxed text-muted-foreground sm:text-base">
             아직 작성한 견적이 없어요. 아래 시작 버튼으로 운영 준비를 한 번에 진행해보세요.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Button asChild size="sm">
+            <Button asChild>
               <Link href="/quotes/new">새 견적 작성</Link>
             </Button>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline">
               <Link href="/price-items">단가표 등록</Link>
             </Button>
-            <Button asChild variant="outline" size="sm">
+            <Button asChild variant="outline">
               <Link href="/settings/company">회사 정보 설정</Link>
             </Button>
           </div>
@@ -371,7 +356,7 @@ export default function QuotesPage() {
       ) : null}
 
       {showFilteredEmpty ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground sm:text-base">
           {searchTerm.trim()
             ? "검색 조건에 맞는 견적이 없습니다. 검색어를 바꾸거나 상태 필터를 초기화해보세요."
             : statusFilter === STATUS_FILTER_ALL
@@ -420,6 +405,20 @@ export default function QuotesPage() {
         items={historyItems}
         loading={historyLoading}
       />
-    </main>
+      </main>
+
+      <div
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-[0_-6px_24px_rgba(0,0,0,0.06)] backdrop-blur-md supports-[backdrop-filter]:bg-background/90"
+        role="region"
+        aria-label="새 견적 작성"
+      >
+        <div className="mx-auto w-full max-w-3xl space-y-2 px-4 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2.5 sm:px-6">
+          <Button asChild className="w-full touch-manipulation shadow-sm" size="lg" disabled={!session}>
+            <Link href="/quotes/new">새 견적</Link>
+          </Button>
+          <AppLegalBlock variant="compact" className="pb-0.5 pt-1" />
+        </div>
+      </div>
+    </>
   );
 }

@@ -277,9 +277,6 @@ export default function LoginPage() {
             }}
           />
         </div>
-        <p className="text-xs text-muted-foreground">
-          카카오 OAuth Provider 설정이 완료되어야 동작합니다.
-        </p>
       </div>
 
       <p className="text-xs text-muted-foreground">

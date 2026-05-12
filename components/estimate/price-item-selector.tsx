@@ -43,9 +43,11 @@ export function PriceItemSelector({
       .filter((item) => (categoryFilter === "전체" ? true : item.category === categoryFilter))
       .filter((item) => {
         if (!q) return true;
+        const cat = (item.category ?? "").toLowerCase();
         return (
           item.internal_name.toLowerCase().includes(q) ||
-          item.customer_name.toLowerCase().includes(q)
+          item.customer_name.toLowerCase().includes(q) ||
+          cat.includes(q)
         );
       })
       .sort((a, b) => b.usage_count - a.usage_count);
@@ -100,7 +102,7 @@ export function PriceItemSelector({
           <div className="min-w-0 flex-1">
             <DialogTitle>단가표에서 선택</DialogTitle>
             <DialogDescription className="mt-1">
-              체크박스로 여러 항목을 선택해 한 번에 추가할 수 있어요.
+              체크박스로 여러 항목을 선택해 한 번에 추가할 수 있어요. 고객용·내부명·카테고리로 검색됩니다.
             </DialogDescription>
           </div>
           <span className="shrink-0 rounded-full bg-indigo-50 px-3 py-1 text-sm font-medium text-indigo-700">
@@ -113,7 +115,7 @@ export function PriceItemSelector({
             <div className="space-y-1">
               <p className="text-sm font-medium text-gray-700">검색</p>
               <Input
-                placeholder="내부명 또는 고객용 이름으로 검색"
+                placeholder="고객용 이름, 내부명, 카테고리로 검색"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 disabled={loading}

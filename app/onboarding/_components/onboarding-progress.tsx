@@ -14,53 +14,60 @@ const steps = [
 export function OnboardingProgress({ currentStep }: { currentStep: 1 | 2 | 3 | 4 }) {
   return (
     <div className="w-full min-w-0">
-      <ol className="flex w-full min-w-0 flex-wrap items-center gap-x-1 gap-y-2">
+      <ol
+        className="grid w-full min-w-0 grid-cols-4 gap-2"
+        aria-label="온보딩 진행 단계"
+      >
         {steps.map((step, index) => {
           const n = index + 1;
           const completed = n < currentStep;
           const current = n === currentStep;
           const canMove = n <= currentStep;
+          const circle = (
+            <span
+              className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
+                completed && "border-indigo-600 bg-indigo-600 text-white",
+                current && "border-indigo-600 bg-white text-indigo-600",
+                !completed && !current && "border-gray-300 bg-white text-gray-400"
+              )}
+              aria-hidden="true"
+            >
+              {completed ? <Check className="h-4 w-4" /> : n}
+            </span>
+          );
+          const label = (
+            <span
+              className={cn(
+                "line-clamp-2 w-full text-center text-sm leading-snug sm:text-base",
+                completed && "font-semibold text-gray-900",
+                current && "font-semibold text-indigo-700",
+                !completed && !current && "font-normal text-gray-500"
+              )}
+            >
+              {step.label}
+            </span>
+          );
           return (
-            <li key={step.href} className="flex min-w-0 max-w-full shrink-0 items-center gap-1.5">
+            <li
+              key={step.href}
+              className="min-w-0"
+              aria-current={current ? "step" : undefined}
+            >
               {canMove ? (
                 <Link
                   href={step.href}
-                  className="flex min-w-0 max-w-full items-center gap-1.5 rounded-md px-0.5 py-0.5"
+                  className="flex w-full min-w-0 flex-col items-center gap-0.5 rounded-md px-0.5 py-0 text-center outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
                 >
-                  <span
-                    className={cn(
-                      "inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs",
-                      completed && "border-indigo-600 bg-indigo-600 text-white",
-                      current && "border-indigo-600 text-indigo-600",
-                      !completed && !current && "border-gray-300 text-gray-500"
-                    )}
-                  >
-                    {completed ? <Check className="h-3.5 w-3.5" /> : n}
-                  </span>
-                  <span
-                    className={cn(
-                      "max-w-[6.5rem] text-xs leading-tight break-words sm:max-w-none sm:text-sm",
-                      current ? "font-semibold text-indigo-700" : "text-gray-600"
-                    )}
-                  >
-                    {step.label}
-                  </span>
+                  {circle}
+                  {label}
                 </Link>
               ) : (
-                <div className="flex min-w-0 max-w-full items-center gap-1.5 opacity-60">
-                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-gray-300 text-xs text-gray-500">
-                    {n}
-                  </span>
-                  <span className="max-w-[6.5rem] text-xs leading-tight break-words text-gray-500 sm:max-w-none sm:text-sm">
-                    {step.label}
-                  </span>
+                <div className="flex w-full min-w-0 flex-col items-center gap-0.5 rounded-md px-0.5 py-0 text-center opacity-60">
+                  {circle}
+                  {label}
                 </div>
               )}
-              {index < steps.length - 1 ? (
-                <span className="shrink-0 text-gray-300" aria-hidden="true">
-                  ·
-                </span>
-              ) : null}
             </li>
           );
         })}

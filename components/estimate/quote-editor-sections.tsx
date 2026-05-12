@@ -1,11 +1,13 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { EditableQuoteItem, QuoteItemList } from "@/components/estimate/quote-item-list";
+import { PriceItem } from "@/components/price-item/types";
 import { cn } from "@/lib/utils";
 
 export type StepState = "completed" | "current" | "pending";
@@ -18,10 +20,9 @@ export type Step = {
 
 type QuoteStepsProps = {
   steps: Step[];
-  onStepSelect?: (step: number) => void;
 };
 
-export function QuoteSteps({ steps, onStepSelect }: QuoteStepsProps) {
+export function QuoteSteps({ steps }: QuoteStepsProps) {
   return (
     <ol
       className="grid w-full min-w-0 grid-cols-3 gap-2"
@@ -29,14 +30,10 @@ export function QuoteSteps({ steps, onStepSelect }: QuoteStepsProps) {
     >
       {steps.map((step) => (
         <li key={step.number} className="min-w-0" aria-current={step.state === "current" ? "step" : undefined}>
-          <button
-            type="button"
-            className="flex w-full min-w-0 flex-col items-center gap-1 rounded-md px-0.5 py-1 text-center outline-none ring-offset-2 focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={() => onStepSelect?.(step.number)}
-          >
+          <div className="flex w-full min-w-0 flex-col items-center gap-0.5 rounded-md px-0.5 py-0 text-center">
             <span
               className={cn(
-                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-xs font-medium",
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-sm font-medium",
                 step.state === "completed" && "border-indigo-600 bg-indigo-600 text-white",
                 step.state === "current" && "border-indigo-600 bg-white text-indigo-600",
                 step.state === "pending" && "border-gray-300 bg-white text-gray-400"
@@ -47,7 +44,7 @@ export function QuoteSteps({ steps, onStepSelect }: QuoteStepsProps) {
             </span>
             <span
               className={cn(
-                "line-clamp-2 w-full text-xs leading-snug sm:text-sm",
+                "line-clamp-2 w-full text-sm leading-snug sm:text-base",
                 step.state === "completed" && "font-semibold text-gray-900",
                 step.state === "current" && "font-semibold text-indigo-700",
                 step.state === "pending" && "font-normal text-gray-500"
@@ -55,7 +52,7 @@ export function QuoteSteps({ steps, onStepSelect }: QuoteStepsProps) {
             >
               {step.label}
             </span>
-          </button>
+          </div>
         </li>
       ))}
     </ol>
@@ -104,12 +101,12 @@ export function SiteInfoSection({
   onStatusChange,
 }: SiteInfoSectionProps) {
   return (
-    <section className="space-y-4" aria-labelledby="quote-section-site">
-      <h3 id="quote-section-site" className="text-base font-semibold text-gray-900">
+    <section className="space-y-5" aria-labelledby="quote-section-site">
+      <h3 id="quote-section-site" className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl">
         현장 정보
       </h3>
-      <div className="grid gap-3 md:grid-cols-2">
-          <div className="space-y-2">
+      <div className="grid gap-4 md:grid-cols-2">
+          <div className="space-y-2.5">
             <Label htmlFor="customerName">
               고객명 <span className="text-red-500">*</span>
             </Label>
@@ -121,7 +118,7 @@ export function SiteInfoSection({
               disabled={!sessionExists}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="projectName">
               현장명 <span className="text-red-500">*</span>
             </Label>
@@ -133,7 +130,7 @@ export function SiteInfoSection({
               disabled={!sessionExists}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="siteName">세부 현장명</Label>
             <Input
               id="siteName"
@@ -143,7 +140,7 @@ export function SiteInfoSection({
               disabled={!sessionExists}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="constructionType">시공 종류</Label>
             <Input
               id="constructionType"
@@ -153,7 +150,7 @@ export function SiteInfoSection({
               disabled={!sessionExists}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="status">
               상태 <span className="text-red-500">*</span>
             </Label>
@@ -174,7 +171,7 @@ export function SiteInfoSection({
               <option value="거절됨">거절됨</option>
             </select>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="validityDays">
               유효일수 <span className="text-red-500">*</span>
             </Label>
@@ -187,7 +184,7 @@ export function SiteInfoSection({
               disabled={!sessionExists}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="issuedDate">
               발행일 <span className="text-red-500">*</span>
             </Label>
@@ -199,7 +196,7 @@ export function SiteInfoSection({
               disabled={!sessionExists}
             />
           </div>
-          <div className="space-y-2">
+          <div className="space-y-2.5">
             <Label htmlFor="quoteNumber">견적번호</Label>
             <Input
               id="quoteNumber"
@@ -220,8 +217,11 @@ type ItemsSectionProps = {
   items: EditableQuoteItem[];
   categoryOptions: string[];
   marginFlatAmount?: number;
+  priceItems: PriceItem[];
   onOpenSelector: () => void;
-  onAddManual: () => void;
+  onAddFromPriceItem: (item: PriceItem) => void;
+  onAddPriceItemAsEditableManual: (item: PriceItem) => void;
+  onAddManual: (prefillCustomerName?: string) => void;
   onItemChange: (clientId: string, patch: Partial<EditableQuoteItem>) => void;
   onRemove: (clientId: string) => void;
   onMove: (clientId: string, direction: "up" | "down") => void;
@@ -234,41 +234,127 @@ export function ItemsSection({
   items,
   categoryOptions,
   marginFlatAmount = 0,
+  priceItems,
   onOpenSelector,
+  onAddFromPriceItem,
+  onAddPriceItemAsEditableManual,
   onAddManual,
   onItemChange,
   onRemove,
   onMove,
   embedded = false,
 }: ItemsSectionProps) {
+  const [addSearchQuery, setAddSearchQuery] = useState("");
+
+  const searchMatches = useMemo(() => {
+    const q = addSearchQuery.trim().toLowerCase();
+    const base = priceItems.filter((item) => item.is_active);
+    if (!q) return [];
+    return base
+      .filter((item) => {
+        const cat = (item.category ?? "").toLowerCase();
+        return (
+          item.internal_name.toLowerCase().includes(q) ||
+          item.customer_name.toLowerCase().includes(q) ||
+          cat.includes(q)
+        );
+      })
+      .sort((a, b) => b.usage_count - a.usage_count)
+      .slice(0, 12);
+  }, [priceItems, addSearchQuery]);
+
+  const trimmedSearch = addSearchQuery.trim();
+
   return (
-    <section className="space-y-4" aria-labelledby="quote-section-items">
-      <h3 id="quote-section-items" className="text-base font-semibold text-gray-900">
+    <section className="space-y-5" aria-labelledby="quote-section-items">
+      <h3 id="quote-section-items" className="text-lg font-semibold tracking-tight text-gray-900 sm:text-xl">
         견적 항목
       </h3>
-      <div className="rounded-md border border-indigo-100 bg-indigo-50 p-3 text-sm text-indigo-900">
-        <p className="font-medium">항목 추가 방법</p>
-        <p className="mt-1">- 단가 입력: 바로 입력하여 사용할 때</p>
-        <p>- 단가표에서 선택: 자주 쓰는 항목을 재사용할 때</p>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          type="button"
-          className="bg-indigo-600 text-white hover:bg-indigo-700"
-          disabled={loading || !sessionExists}
-          onClick={onAddManual}
-        >
-          단가 입력
-        </Button>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:gap-4">
+        <div className="min-w-0 flex-1 space-y-2.5">
+          <Label htmlFor="quote-item-add-search">항목 추가</Label>
+          <Input
+            id="quote-item-add-search"
+            placeholder="예: 외벽 보수, 간판 시공… (고객용·내부명·카테고리)"
+            value={addSearchQuery}
+            onChange={(e) => setAddSearchQuery(e.target.value)}
+            disabled={loading || !sessionExists}
+            autoComplete="off"
+            className="border-indigo-300 bg-indigo-50/90 text-gray-900 placeholder:text-indigo-900/40 focus-visible:border-indigo-500 focus-visible:ring-2 focus-visible:ring-indigo-200"
+          />
+        </div>
         <Button
           type="button"
           variant="secondary"
+          className="w-full shrink-0 sm:w-auto"
           disabled={loading || !sessionExists}
           onClick={onOpenSelector}
         >
-          단가표에서 선택
+          단가표 전체에서 선택
         </Button>
       </div>
+
+      {trimmedSearch ? (
+        <div className="space-y-3 rounded-md border border-border bg-background p-4">
+          {searchMatches.length > 0 ? (
+            <ul className="max-h-60 space-y-2.5 overflow-y-auto" aria-label="단가표 검색 결과">
+              {searchMatches.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-base font-medium text-gray-900 sm:text-lg">{row.customer_name}</p>
+                    <p className="truncate text-sm text-muted-foreground sm:text-base">
+                      {row.category ?? "미분류"} · 내부: {row.internal_name || "—"} ·{" "}
+                      {Number(row.customer_price || 0).toLocaleString()}원 / {row.unit || "—"}
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-gray-300"
+                      disabled={loading || !sessionExists}
+                      onClick={() => {
+                        onAddPriceItemAsEditableManual(row);
+                        setAddSearchQuery("");
+                      }}
+                    >
+                      수정
+                    </Button>
+                    <Button
+                      type="button"
+                      className="bg-indigo-600 text-white hover:bg-indigo-700"
+                      disabled={loading || !sessionExists}
+                      onClick={() => {
+                        onAddFromPriceItem(row);
+                        setAddSearchQuery("");
+                      }}
+                    >
+                      추가
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-muted-foreground sm:text-base">일치하는 단가표 항목이 없습니다.</p>
+          )}
+          <Button
+            type="button"
+            className="w-full bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
+            disabled={loading || !sessionExists}
+            onClick={() => {
+              onAddManual(trimmedSearch);
+              setAddSearchQuery("");
+            }}
+          >
+            「{trimmedSearch}」 단가 입력
+          </Button>
+        </div>
+      ) : null}
 
       <QuoteItemList
         items={items}
@@ -304,9 +390,9 @@ export function MarginFlatSection({
   onMarginFlatChange,
 }: MarginFlatSectionProps) {
   return (
-    <section className="space-y-2" aria-labelledby="quote-margin-flat">
-      <div className="flex items-center justify-between rounded-md border bg-white px-3 py-2">
-        <h3 id="quote-margin-flat" className="text-base font-semibold text-gray-900">
+    <section className="space-y-3" aria-labelledby="quote-margin-flat">
+      <div className="flex items-center justify-between rounded-md border bg-white px-4 py-3">
+        <h3 id="quote-margin-flat" className="text-base font-semibold text-gray-900 sm:text-lg">
           일괄 마진
         </h3>
         <Switch
@@ -316,14 +402,14 @@ export function MarginFlatSection({
           disabled={!sessionExists || disabled}
         />
       </div>
-      <p className="text-sm text-muted-foreground">
+      <p className="text-base leading-relaxed text-muted-foreground">
         입력한 금액만큼 고객 합계에 더해지며, 각 행은{" "}
         <strong className="font-medium text-gray-800">수량 비례로</strong> 같은 비율로 나뉘어 소계에
         더해집니다.
       </p>
       <div className="flex flex-wrap items-end gap-3">
         <div className="w-full max-w-xs space-y-1.5">
-          <label htmlFor="marginFlatAmount" className="text-sm font-medium text-gray-900">
+          <label htmlFor="marginFlatAmount" className="text-base font-medium text-gray-900">
             마진금액(원)
           </label>
           {enabled ? (
@@ -340,12 +426,12 @@ export function MarginFlatSection({
               className="max-w-xs tabular-nums"
             />
           ) : (
-            <div className="h-10 rounded-md border border-dashed bg-gray-50 px-3 py-2 text-sm text-gray-500">
+            <div className="flex min-h-14 items-center rounded-md border border-dashed bg-gray-50 px-4 py-2 text-base text-gray-500">
               토글을 켜면 금액 입력이 활성화됩니다.
             </div>
           )}
         </div>
-        <p className="pb-2 text-sm tabular-nums text-indigo-700">
+        <p className="pb-2 text-base tabular-nums text-indigo-700">
           {marginPercentHint ? (
             <>
               공급가 대비 <span className="font-semibold">{marginPercentHint}%</span> 추가
@@ -386,11 +472,11 @@ export function TotalsSection({
   const vatExcluded = !vatIncluded;
   return (
     <section className="space-y-4" aria-labelledby="quote-section-totals">
-      <h3 id="quote-section-totals" className="text-base font-semibold text-gray-900">
+      <h3 id="quote-section-totals" className="text-base font-semibold text-gray-900 sm:text-lg">
         합계
       </h3>
       <div className="flex items-center justify-between gap-3">
-        <Label htmlFor="vatExcluded" className="text-sm font-medium text-gray-900">
+        <Label htmlFor="vatExcluded" className="text-base font-medium text-gray-900">
           부가세 별도
         </Label>
         <Switch
@@ -402,17 +488,17 @@ export function TotalsSection({
         />
       </div>
 
-      <div className="space-y-2 rounded-md bg-white p-4 ring-1 ring-indigo-200">
-        <div className="flex items-center justify-between text-sm">
+      <div className="space-y-3 rounded-md bg-white p-5 ring-1 ring-indigo-200">
+        <div className="flex items-center justify-between text-base">
           <span className="text-gray-600">공급가</span>
-          <span className="font-medium text-gray-900">{formatKRW(subtotalCustomer)}원</span>
+          <span className="font-semibold text-gray-900">{formatKRW(subtotalCustomer)}원</span>
         </div>
-        <div className="flex items-center justify-between text-sm">
+        <div className="flex items-center justify-between text-base">
           <span className="text-gray-600">부가세</span>
-          <span className="font-medium text-gray-900">{formatKRW(vatAmount)}원</span>
+          <span className="font-semibold text-gray-900">{formatKRW(vatAmount)}원</span>
         </div>
-        <div className="mt-1 flex items-baseline justify-between border-t border-indigo-100 pt-3">
-          <span className="text-sm font-medium text-gray-900">총액</span>
+        <div className="mt-1 flex items-baseline justify-between border-t border-indigo-100 pt-4">
+          <span className="text-base font-semibold text-gray-900">총액</span>
           <span className="text-xl font-bold tabular-nums text-indigo-700 sm:text-2xl">
             {formatKRW(totalAmount)}원
           </span>
@@ -439,7 +525,7 @@ export function PublicNotesSection({
 }: PublicNotesSectionProps) {
   return (
     <section className="space-y-4" aria-labelledby="quote-public-notes">
-      <h3 id="quote-public-notes" className="text-base font-semibold text-gray-900">
+      <h3 id="quote-public-notes" className="text-base font-semibold text-gray-900 sm:text-lg">
         비고(견적서 하단에 노출됩니다)
       </h3>
       <textarea
@@ -448,11 +534,11 @@ export function PublicNotesSection({
         disabled={!sessionExists}
         rows={5}
         placeholder={`예시)\n계좌번호: OO은행 123-456-789012 예금주 ㈜OOO\n선금 30% 후 시공 시작, 잔금 70% 검수 후 7영업일 이내\n유효기간 내 진행 안 시 재견 필요`}
-        className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2.5 text-base leading-relaxed sm:px-3.5 sm:py-3"
       />
       {recentNotes.length > 0 ? (
-        <div className="space-y-2 rounded-md border p-3">
-          <p className="text-xs font-medium text-gray-700">이전 비고 불러오기</p>
+        <div className="space-y-3 rounded-md border p-4">
+          <p className="text-base font-medium text-gray-700">이전 비고 불러오기</p>
           <div className="flex flex-wrap gap-2">
             {recentNotes.map((note, index) => (
               <Button
@@ -486,7 +572,7 @@ export function MemoSection({
 }: MemoSectionProps) {
   return (
     <section className="space-y-4" aria-labelledby="quote-section-memo">
-      <h3 id="quote-section-memo" className="text-base font-semibold text-gray-900">
+      <h3 id="quote-section-memo" className="text-base font-semibold text-gray-900 sm:text-lg">
         내부 메모(선택)
       </h3>
       <textarea
@@ -495,7 +581,7 @@ export function MemoSection({
         onChange={(e) => onInternalMemoChange(e.target.value)}
         placeholder="내부 참고 내용을 입력하세요."
         disabled={!sessionExists}
-        className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+        className="min-h-24 w-full rounded-md border border-input bg-background px-3 py-2.5 text-base leading-relaxed sm:px-3.5 sm:py-3"
       />
     </section>
   );

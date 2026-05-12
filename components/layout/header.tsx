@@ -15,13 +15,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Separator } from "@/components/ui/separator";
+import { AppLegalBlock } from "@/components/layout/app-legal-block";
 import { createClient } from "@/lib/supabase/client";
 
-const NAV_ITEMS: Array<{ href: string; label: string }> = [
+const NAV_PUBLIC: Array<{ href: string; label: string }> = [
   { href: "/quotes", label: "견적" },
   { href: "/price-items", label: "단가표" },
 ];
+const NAV_COMPANY = { href: "/settings/company", label: "회사 정보" } as const;
 
 export function Header() {
   const pathname = usePathname();
@@ -73,36 +74,57 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-40 w-full min-w-0 border-b border-border bg-background/95 backdrop-blur">
-      <div className="mx-auto flex w-full min-w-0 max-w-6xl items-center justify-between gap-3 px-4 py-3">
-        <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-5">
+      <div className="mx-auto flex min-h-12 w-full min-w-0 max-w-6xl items-center justify-between gap-2 px-4 py-1.5 sm:px-5">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-5 md:gap-6">
           <Link
             href="/"
-            className="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-900 sm:text-base"
+            className="flex min-w-0 items-center gap-2 text-gray-900"
             aria-label="견적노트 홈"
           >
             <span
-              className="flex h-8 w-8 items-center justify-center rounded-md bg-indigo-600 text-white"
+              className="flex size-8 shrink-0 items-center justify-center rounded-md bg-indigo-600 text-white"
               aria-hidden="true"
             >
-              <NotebookPen className="h-4 w-4" />
+              <NotebookPen className="size-4" />
             </span>
-            <span className="truncate">견적노트</span>
+            <span className="truncate text-lg font-semibold tracking-tight">견적노트</span>
           </Link>
           {!isMinimalHeader ? (
             <nav
-              className="hidden items-center gap-4 text-base text-gray-600 md:flex"
+              className="hidden min-w-0 items-center gap-4 text-sm font-medium text-gray-600 md:flex"
               aria-label="주요 메뉴"
             >
-              {NAV_ITEMS.map((item) => (
-                <Link key={item.href} href={item.href} className="hover:text-gray-900">
-                  {item.label}
+              {NAV_PUBLIC.map((item) => {
+                const active =
+                  pathname === item.href || pathname.startsWith(`${item.href}/`);
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={active ? "text-gray-900" : "hover:text-gray-900"}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+              {session ? (
+                <Link
+                  href={NAV_COMPANY.href}
+                  className={
+                    pathname === NAV_COMPANY.href ||
+                    pathname.startsWith(`${NAV_COMPANY.href}/`)
+                      ? "text-gray-900"
+                      : "hover:text-gray-900"
+                  }
+                >
+                  {NAV_COMPANY.label}
                 </Link>
-              ))}
+              ) : null}
             </nav>
           ) : null}
         </div>
 
-        <div className="hidden items-center gap-2 md:flex">
+        <div className="hidden shrink-0 items-center gap-2 md:flex md:pl-2">
           {!isMinimalHeader && session ? (
             <>
               <DropdownMenu>
@@ -111,21 +133,20 @@ export function Header() {
                     type="button"
                     variant="outline"
                     size="sm"
-                    className="max-w-64 gap-1 text-gray-800"
+                    className="h-10 max-w-[11rem] gap-1.5 px-3 text-gray-800 lg:max-w-[15rem] xl:max-w-[19rem]"
                     disabled={loading}
                   >
-                    <span className="truncate">{session.user.email}</span>
+                    <span className="min-w-0 flex-1 truncate text-left text-sm sm:text-base">
+                      {session.user.email}
+                    </span>
                     <ChevronDown className="size-4 shrink-0 opacity-70" aria-hidden />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="min-w-48">
-                  <DropdownMenuLabel className="max-w-64 truncate font-normal text-muted-foreground">
+                <DropdownMenuContent align="end" className="min-w-[12rem] max-w-[min(100vw-2rem,24rem)]">
+                  <DropdownMenuLabel className="whitespace-normal break-all font-normal text-muted-foreground">
                     {session.user.email}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/settings/company">회사 정보</Link>
-                  </DropdownMenuItem>
                   <DropdownMenuItem
                     onSelect={(ev) => {
                       ev.preventDefault();
@@ -134,11 +155,18 @@ export function Header() {
                   >
                     로그아웃
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href="/terms">이용약관</Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/privacy">개인정보처리방침</Link>
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </>
           ) : !isMinimalHeader ? (
-            <Button asChild size="sm">
+            <Button asChild>
               <Link href="/login">로그인</Link>
             </Button>
           ) : null}
@@ -148,7 +176,7 @@ export function Header() {
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            size="icon-sm"
             className="md:hidden"
             aria-label={menuOpen ? "메뉴 닫기" : "메뉴 열기"}
             aria-expanded={menuOpen}
@@ -174,12 +202,12 @@ export function Header() {
                 aria-hidden="true"
               />
               <div className="absolute inset-y-0 right-0 flex w-[80%] max-w-sm flex-col bg-white shadow-xl">
-                <div className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3">
-                  <span className="text-base font-semibold text-gray-900">메뉴</span>
+                <div className="flex h-12 shrink-0 items-center justify-between border-b border-gray-200 bg-white px-4">
+                  <span className="text-sm font-semibold text-gray-900">메뉴</span>
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
+                    size="icon-sm"
                     aria-label="메뉴 닫기"
                     onClick={() => setMenuOpen(false)}
                   >
@@ -187,48 +215,69 @@ export function Header() {
                   </Button>
                 </div>
 
-                <nav className="flex flex-col gap-1 bg-white p-2" aria-label="모바일 메뉴">
-                  {NAV_ITEMS.map((item) => {
-                    const active =
-                      pathname === item.href || pathname.startsWith(`${item.href}/`);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={() => setMenuOpen(false)}
-                        className={
-                          "flex min-h-12 items-center rounded-md px-3 text-base font-medium " +
-                          (active
-                            ? "bg-indigo-50 text-indigo-700"
-                            : "text-gray-900 hover:bg-gray-50")
-                        }
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
+                <nav
+                  className="min-h-0 flex-1 overflow-y-auto bg-white p-2"
+                  aria-label="모바일 메뉴"
+                >
+                  {session
+                    ? [...NAV_PUBLIC, NAV_COMPANY].map((item) => {
+                        const active =
+                          pathname === item.href || pathname.startsWith(`${item.href}/`);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setMenuOpen(false)}
+                            className={
+                              "flex min-h-11 items-center rounded-md px-3 text-sm font-medium " +
+                              (active
+                                ? "bg-indigo-50 text-indigo-700"
+                                : "text-gray-900 hover:bg-gray-50")
+                            }
+                          >
+                            {item.label}
+                          </Link>
+                        );
+                      })
+                    : NAV_PUBLIC.map((item) => {
+                        const active =
+                          pathname === item.href || pathname.startsWith(`${item.href}/`);
+                        return (
+                          <Link
+                            key={item.href}
+                            href={item.href}
+                            onClick={() => setMenuOpen(false)}
+                            className={
+                              "flex min-h-11 items-center rounded-md px-3 text-sm font-medium " +
+                              (active
+                                ? "bg-indigo-50 text-indigo-700"
+                                : "text-gray-900 hover:bg-gray-50")
+                            }
+                          >
+                            {item.label}
+                          </Link>
+                        );
+                      })}
                 </nav>
 
-                <Separator />
-
-                <div className="mt-auto flex flex-col gap-3 bg-white p-4">
+                <div className="shrink-0 border-t border-gray-100 bg-white p-4">
                   {session ? (
-                    <>
-                      <p className="text-sm text-muted-foreground">로그인 계정</p>
-                      <p className="truncate text-sm font-medium text-gray-900">
-                        {session.user.email}
-                      </p>
-                      <Button asChild variant="outline">
-                        <Link href="/settings/company" onClick={() => setMenuOpen(false)}>
-                          회사 정보
-                        </Link>
-                      </Button>
-                      <Button onClick={handleSignOut} disabled={loading} variant="outline">
+                    <div className="flex flex-col gap-3">
+                      <div>
+                        <p className="text-xs text-muted-foreground">로그인 계정</p>
+                        <p className="truncate text-sm font-medium text-gray-900">
+                          {session.user.email}
+                        </p>
+                      </div>
+                      <Button onClick={handleSignOut} disabled={loading} variant="outline" size="sm">
                         로그아웃
                       </Button>
-                    </>
+                      <div className="border-t border-gray-100 pt-3">
+                        <AppLegalBlock variant="menu" className="space-y-2 text-xs leading-snug" />
+                      </div>
+                    </div>
                   ) : (
-                    <Button asChild>
+                    <Button asChild className="w-full">
                       <Link href="/login" onClick={() => setMenuOpen(false)}>
                         로그인
                       </Link>
