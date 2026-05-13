@@ -422,6 +422,7 @@ export default function PriceItemsPage() {
       </main>
 
       <div
+        data-capture-dock
         className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 shadow-[0_-6px_24px_rgba(0,0,0,0.06)] backdrop-blur-md supports-[backdrop-filter]:bg-background/90"
         role="region"
         aria-label="새 단가 추가"

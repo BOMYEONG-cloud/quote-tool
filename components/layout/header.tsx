@@ -28,6 +28,7 @@ export function Header() {
   const pathname = usePathname();
   const isLoginPage = pathname === "/login";
   const isOnboardingPage = pathname.startsWith("/onboarding");
+  const isHome = pathname === "/";
   const isMinimalHeader = isLoginPage || isOnboardingPage;
   const supabase = useMemo(() => createClient(), []);
   const [session, setSession] = useState<Session | null>(null);
@@ -70,7 +71,7 @@ export function Header() {
     }
   };
 
-  const showMobileMenu = !isMinimalHeader;
+  const showMobileMenu = !isMinimalHeader && !isHome;
 
   return (
     <header className="sticky top-0 z-40 w-full min-w-0 border-b border-border bg-background/95 backdrop-blur">
@@ -89,7 +90,7 @@ export function Header() {
             </span>
             <span className="truncate text-lg font-semibold tracking-tight">견적노트</span>
           </Link>
-          {!isMinimalHeader ? (
+          {!isMinimalHeader && !isHome ? (
             <nav
               className="hidden min-w-0 items-center gap-4 text-sm font-medium text-gray-600 md:flex"
               aria-label="주요 메뉴"
@@ -124,8 +125,32 @@ export function Header() {
           ) : null}
         </div>
 
-        <div className="hidden shrink-0 items-center gap-2 md:flex md:pl-2">
-          {!isMinimalHeader && session ? (
+        <div className="hidden shrink-0 items-center gap-3 md:flex md:pl-2">
+          {isHome && session ? (
+            <Button
+              asChild
+              size="sm"
+              className="bg-[#4F46E5] font-semibold text-white hover:bg-[#4338CA]"
+            >
+              <Link href="/quotes">대시보드</Link>
+            </Button>
+          ) : isHome && !session ? (
+            <>
+              <Link
+                href="/login"
+                className="text-sm font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-gray-900 hover:underline"
+              >
+                로그인
+              </Link>
+              <Button
+                asChild
+                size="sm"
+                className="bg-[#4F46E5] font-semibold text-white shadow-sm hover:bg-[#4338CA]"
+              >
+                <Link href="/login">무료로 시작하기 →</Link>
+              </Button>
+            </>
+          ) : !isMinimalHeader && session ? (
             <>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -172,7 +197,35 @@ export function Header() {
           ) : null}
         </div>
 
-        {showMobileMenu ? (
+        {isHome ? (
+          <div className="flex shrink-0 items-center gap-2 md:hidden">
+            {session ? (
+              <Button
+                asChild
+                size="sm"
+                className="bg-[#4F46E5] font-semibold text-white hover:bg-[#4338CA]"
+              >
+                <Link href="/quotes">대시보드</Link>
+              </Button>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="text-sm font-medium text-muted-foreground underline-offset-4 hover:text-gray-900 hover:underline"
+                >
+                  로그인
+                </Link>
+                <Button
+                  asChild
+                  size="sm"
+                  className="bg-[#4F46E5] px-3 text-xs font-semibold text-white shadow-sm hover:bg-[#4338CA] sm:text-sm"
+                >
+                  <Link href="/login">무료로 시작하기 →</Link>
+                </Button>
+              </>
+            )}
+          </div>
+        ) : showMobileMenu ? (
           <Button
             type="button"
             variant="ghost"

@@ -1260,16 +1260,28 @@ export function QuoteEditor(props: QuoteEditorProps) {
         >
           이전
         </Button>
-        <Button
-          className="min-h-11 min-w-[5.5rem] flex-1 touch-manipulation bg-indigo-600 px-4 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 sm:flex-initial sm:min-w-[7rem]"
-          disabled={currentFormStep === 3}
-          onClick={() => {
-            if (!validateStepBeforeNext(currentFormStep)) return;
-            setCurrentFormStep((prev) => (prev === 3 ? prev : ((prev + 1) as 1 | 2 | 3)));
-          }}
-        >
-          다음
-        </Button>
+        {currentFormStep === 3 && editingId ? null : (
+          <Button
+            className="min-h-11 min-w-[5.5rem] flex-1 touch-manipulation bg-indigo-600 px-4 text-base font-semibold text-white shadow-sm hover:bg-indigo-700 sm:flex-initial sm:min-w-[7rem]"
+            disabled={
+              currentFormStep === 3 && !editingId ? loading || !session : false
+            }
+            onClick={() => {
+              if (currentFormStep === 3 && !editingId) {
+                void handleInsert();
+                return;
+              }
+              if (!validateStepBeforeNext(currentFormStep)) return;
+              setCurrentFormStep((prev) => (prev === 3 ? prev : ((prev + 1) as 1 | 2 | 3)));
+            }}
+          >
+            {currentFormStep === 3 && !editingId
+              ? loading
+                ? "저장 중..."
+                : "견적 완료"
+              : "다음"}
+          </Button>
+        )}
       </div>
 
       {message ? (
@@ -1297,15 +1309,12 @@ export function QuoteEditor(props: QuoteEditorProps) {
         </div>
       ) : null}
 
-      {currentFormStep === 3 ? (
+      {currentFormStep === 3 && editingId ? (
         <SaveActions
           sessionExists={Boolean(session)}
           loading={loading}
-          editingId={editingId}
-          onInsert={handleInsert}
           onUpdate={handleUpdate}
-          onDelete={editingId ? handleDeleteEstimate : undefined}
-          onCancel={() => router.push("/quotes")}
+          onDelete={handleDeleteEstimate}
         />
       ) : null}
 

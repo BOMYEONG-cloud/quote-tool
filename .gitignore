@@ -42,5 +42,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Playwright
+/playwright-report/
+/test-results/
+
 # supabase CLI (local cache; do not commit)
 supabase/.temp/

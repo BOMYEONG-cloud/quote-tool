@@ -590,54 +590,27 @@ export function MemoSection({
 type SaveActionsProps = {
   sessionExists: boolean;
   loading: boolean;
-  editingId: string | null;
-  onInsert: () => void | Promise<void>;
   onUpdate: () => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
-  onCancel: () => void;
 };
 
-export function SaveActions({
-  sessionExists,
-  loading,
-  editingId,
-  onInsert,
-  onUpdate,
-  onDelete,
-  onCancel,
-}: SaveActionsProps) {
+export function SaveActions({ sessionExists, loading, onUpdate, onDelete }: SaveActionsProps) {
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
       <div className="flex flex-wrap gap-2">
-        {editingId ? (
-          <>
-            <Button onClick={onUpdate} disabled={loading || !sessionExists}>
-              {loading ? "저장 중..." : "수정 저장"}
-            </Button>
-            {onDelete ? (
-              <Button
-                variant="destructive"
-                disabled={loading || !sessionExists}
-                onClick={() => void onDelete()}
-              >
-                삭제
-              </Button>
-            ) : null}
-          </>
-        ) : (
-          <Button onClick={onInsert} disabled={loading || !sessionExists}>
-            {loading ? "저장 중..." : "견적 저장"}
+        <Button onClick={onUpdate} disabled={loading || !sessionExists}>
+          {loading ? "저장 중..." : "수정 저장"}
+        </Button>
+        {onDelete ? (
+          <Button
+            variant="destructive"
+            disabled={loading || !sessionExists}
+            onClick={() => void onDelete()}
+          >
+            삭제
           </Button>
-        )}
+        ) : null}
       </div>
-      <Button
-        variant="outline"
-        className="border-gray-300 text-gray-700 sm:ml-auto"
-        disabled={loading}
-        onClick={onCancel}
-      >
-        취소
-      </Button>
     </div>
   );
 }

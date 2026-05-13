@@ -137,3 +137,16 @@
     accent-color: #4f46e5;
   }
 }
+
+@keyframes landing-page-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.landing-page-enter {
+  animation: landing-page-fade-in 0.45s ease-out forwards;
+}
